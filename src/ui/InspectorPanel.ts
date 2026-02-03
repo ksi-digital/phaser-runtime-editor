@@ -75,22 +75,42 @@ export class InspectorPanel {
         `;
         this.container.appendChild(wrapper);
 
-        this.pane = new Pane({
-            container: wrapper,
-            title: SelectionManager.getObjectName(obj),
-        });
+        // Custom title bar (drag handle) — avoids Tweakpane's built-in collapse toggle
+        const titleBar = document.createElement('div');
+        titleBar.textContent = SelectionManager.getObjectName(obj);
+        titleBar.style.cssText = `
+            padding: 6px 8px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 11px;
+            font-weight: bold;
+            color: #c8ccd0;
+            background: #1f1f1f;
+            border-bottom: 1px solid #333;
+            border-radius: 4px 4px 0 0;
+            cursor: grab;
+            user-select: none;
+        `;
+        wrapper.appendChild(titleBar);
+
+        this.pane = new Pane({ container: wrapper });
+
+        // Make the panel draggable via the custom title bar
+        this.makeDraggable(wrapper, titleBar);
 
         // --- Transform folder ---
         const transform = this.pane.addFolder({ title: 'Transform', expanded: true });
-        transform.addBinding(this.params, 'x', { step: 1, label: 'x' })
+        const xPad = this.coords.designWidth * 0.25;
+        const yPad = this.coords.designHeight * 0.25;
+        transform.addBinding(this.params, 'x', { min: -xPad, max: this.coords.designWidth + xPad, step: 1, label: 'x' })
             .on('change', () => this.applyTransform());
-        transform.addBinding(this.params, 'y', { step: 1, label: 'y' })
+        transform.addBinding(this.params, 'y', { min: -yPad, max: this.coords.designHeight + yPad, step: 1, label: 'y' })
             .on('change', () => this.applyTransform());
-        transform.addBinding(this.params, 'rotation', { step: 1, label: 'rotation' })
+        transform.addBinding(this.params, 'rotation', { min: -180, max: 180, step: 1, label: 'rotation' })
             .on('change', () => this.applyRotation());
-        transform.addBinding(this.params, 'scaleX', { min: 0.01, step: 0.01, label: 'scaleX' })
+        const scaleMax = Math.max(10, this.params.scaleX * 2, this.params.scaleY * 2);
+        transform.addBinding(this.params, 'scaleX', { min: 0.01, max: scaleMax, step: 0.01, label: 'scaleX' })
             .on('change', () => this.applyScale());
-        transform.addBinding(this.params, 'scaleY', { min: 0.01, step: 0.01, label: 'scaleY' })
+        transform.addBinding(this.params, 'scaleY', { min: 0.01, max: scaleMax, step: 0.01, label: 'scaleY' })
             .on('change', () => this.applyScale());
 
         // --- Origin folder ---
@@ -159,7 +179,8 @@ export class InspectorPanel {
 
         this.params.x = Math.round(designPos.x);
         this.params.y = Math.round(designPos.y);
-        this.params.rotation = 'angle' in obj ? (obj as any).angle : 0;
+        const rawAngle = 'angle' in obj ? (obj as any).angle : 0;
+        this.params.rotation = ((rawAngle % 360) + 540) % 360 - 180;
         this.params.scaleX = 'scaleX' in obj ? (obj as any).scaleX : 1;
         this.params.scaleY = 'scaleY' in obj ? (obj as any).scaleY : 1;
 
@@ -219,5 +240,46 @@ export class InspectorPanel {
         if ('alpha' in this.target) (this.target as any).alpha = this.params.alpha;
         if ('visible' in this.target) (this.target as any).visible = this.params.visible;
         this.applying = false;
+    }
+
+    // ---- Draggable panel ----
+
+    private makeDraggable(wrapper: HTMLElement, titleBar: HTMLElement): void {
+        let dragX = 0;
+        let dragY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+
+        const onMouseMove = (e: MouseEvent) => {
+            const dx = e.clientX - dragX;
+            const dy = e.clientY - dragY;
+            wrapper.style.left = `${startLeft + dx}px`;
+            wrapper.style.top = `${startTop + dy}px`;
+        };
+
+        const onMouseUp = () => {
+            titleBar.style.cursor = 'grab';
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+
+        titleBar.addEventListener('mousedown', (e: MouseEvent) => {
+            e.preventDefault();
+            titleBar.style.cursor = 'grabbing';
+
+            // Switch from right-anchored to left-anchored positioning
+            const rect = wrapper.getBoundingClientRect();
+            wrapper.style.right = 'auto';
+            wrapper.style.left = `${rect.left}px`;
+            wrapper.style.top = `${rect.top}px`;
+
+            dragX = e.clientX;
+            dragY = e.clientY;
+            startLeft = rect.left;
+            startTop = rect.top;
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
     }
 }

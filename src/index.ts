@@ -7,6 +7,7 @@ export { GizmoManager } from './gizmos/GizmoManager';
 export { MoveGizmo, DragHandle } from './gizmos/MoveGizmo';
 export { EditorUI } from './ui/EditorUI';
 export { InspectorPanel } from './ui/InspectorPanel';
+export { HierarchyPanel } from './ui/HierarchyPanel';
 
 export type { EditorPluginConfig } from './PhaserEditorPlugin';
 export type { SnappingConfig } from './core/EditorState';

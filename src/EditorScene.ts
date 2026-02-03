@@ -120,6 +120,8 @@ export class EditorScene extends Phaser.Scene {
             this.coordSystem,
             this.htmlContainer!,
             this.getHostScene()!,
+            this.game,
+            this.pausedScenes,
         );
 
         // --- Input: gizmo drag + click to select ---

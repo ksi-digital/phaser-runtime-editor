@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { EditorState } from '../core/EditorState';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { InspectorPanel } from './InspectorPanel';
+import { HierarchyPanel } from './HierarchyPanel';
 
 /**
  * Manages the HTML-based editor UI panels.
@@ -15,12 +16,15 @@ export class EditorUI {
     private hostScene: Phaser.Scene;
 
     private inspector: InspectorPanel;
+    private hierarchy: HierarchyPanel;
 
     constructor(
         state: EditorState,
         coords: CoordinateSystem,
         container: HTMLElement,
         hostScene: Phaser.Scene,
+        game: Phaser.Game,
+        pausedSceneKeys: string[],
     ) {
         this.state = state;
         this.coords = coords;
@@ -28,6 +32,7 @@ export class EditorUI {
         this.hostScene = hostScene;
 
         this.inspector = new InspectorPanel(container, coords);
+        this.hierarchy = new HierarchyPanel(state, game, pausedSceneKeys, container);
 
         // Wire up selection changes
         this.state.on(EditorState.EVENT_SELECTION_CHANGED, this.onSelectionChanged, this);
@@ -43,6 +48,7 @@ export class EditorUI {
      */
     refresh(): void {
         this.inspector.refresh();
+        this.hierarchy.refresh();
     }
 
     private onSelectionChanged(obj: Phaser.GameObjects.GameObject | null): void {
@@ -56,5 +62,6 @@ export class EditorUI {
     destroy(): void {
         this.state.off(EditorState.EVENT_SELECTION_CHANGED, this.onSelectionChanged, this);
         this.inspector.dispose();
+        this.hierarchy.dispose();
     }
 }
