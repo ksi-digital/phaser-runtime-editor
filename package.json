@@ -12,18 +12,27 @@
             "require": "./dist/index.cjs"
         }
     },
+    "files": [
+        "dist",
+        "src"
+    ],
     "scripts": {
         "dev": "vite build --watch",
         "build": "vite build",
+        "demo": "vite --config vite.demo.config.ts",
         "typecheck": "tsc --noEmit"
     },
     "peerDependencies": {
-        "phaser": "^3.60.0"
+        "phaser": "^3.60.0 || ^4.0.0"
     },
     "devDependencies": {
+        "phaser": "^4.0.0-rc.6",
         "typescript": "^5.7.0",
         "vite": "^7.3.1",
-        "vite-plugin-dts": "^4.5.0",
-        "phaser": "^3.90.0"
+        "vite-plugin-dts": "^4.5.0"
+    },
+    "dependencies": {
+        "@tweakpane/core": "^2.0.5",
+        "tweakpane": "^4.0.0"
     }
 }

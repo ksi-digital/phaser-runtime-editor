@@ -37,6 +37,16 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
     private config: Required<EditorPluginConfig>;
     private editorActive = false;
     private pausedScenes: Set<string> = new Set();
+    /** Snapshot of object properties taken on activate, restored on deactivate. */
+    private propertySnapshot: Map<Phaser.GameObjects.GameObject, {
+        x: number; y: number;
+        rotation: number;
+        scaleX: number; scaleY: number;
+        originX: number; originY: number;
+        alpha: number; visible: boolean;
+    }> = new Map();
+
+    private _pluginKey: string;
 
     constructor(
         scene: Phaser.Scene,
@@ -45,9 +55,10 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
     ) {
         super(scene, pluginManager, pluginKey);
 
+        this._pluginKey = pluginKey;
         this.config = {
             designWidth: 720,
-            designHeight: 1552,
+            designHeight: 1280,
             hotkey: 'F2'
         };
     }
@@ -58,16 +69,28 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
     }
 
     boot(): void {
-        const data = this.systems?.settings?.data as EditorPluginConfig | undefined;
-        if (data) {
-            if (data.designWidth != null) this.config.designWidth = data.designWidth;
-            if (data.designHeight != null) this.config.designHeight = data.designHeight;
-            if (data.hotkey != null) this.config.hotkey = data.hotkey;
+        // Read plugin config from the game config's plugin registration entry.
+        // The `data` field in `plugins.scene[{...data}]` is NOT placed on
+        // `systems.settings.data` — it stays on the raw config object.
+        const pluginConfigs = (this.game.config as any)?.installScenePlugins;
+        if (Array.isArray(pluginConfigs)) {
+            for (const entry of pluginConfigs) {
+                if (entry.key === this._pluginKey && entry.data) {
+                    const d = entry.data as EditorPluginConfig;
+                    if (d.designWidth != null) this.config.designWidth = d.designWidth;
+                    if (d.designHeight != null) this.config.designHeight = d.designHeight;
+                    if (d.hotkey != null) this.config.hotkey = d.hotkey;
+                    break;
+                }
+            }
         }
+
+        // Don't let the editor scene's own plugin instance take over
+        if (this.scene!.scene.key === EDITOR_SCENE_KEY) return;
 
         this.registerEditorScene();
 
-        // Track the active plugin instance (the most recently booted scene)
+        // Track the active plugin instance (the most recently booted game scene)
         activePluginInstance = this;
 
         // Register a single DOM keydown listener (once, module-level)
@@ -142,6 +165,9 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
 
         game.scene.bringToTop(EDITOR_SCENE_KEY);
 
+        // Snapshot all object properties so we can restore on deactivate
+        this.snapshotProperties();
+
         console.log('[PhaserEditor] Activated — game scenes paused');
     }
 
@@ -152,6 +178,9 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
         const game = this.systems!.game;
 
         game.scene.stop(EDITOR_SCENE_KEY);
+
+        // Restore all object properties to pre-editor state
+        this.restoreProperties();
 
         for (const key of this.pausedScenes) {
             const scene = game.scene.getScene(key);
@@ -170,6 +199,46 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
 
     get isActive(): boolean {
         return this.editorActive;
+    }
+
+    private snapshotProperties(): void {
+        this.propertySnapshot.clear();
+        const game = this.systems!.game;
+
+        for (const key of this.pausedScenes) {
+            const scene = game.scene.getScene(key);
+            if (!scene) continue;
+
+            for (const obj of scene.children.list) {
+                if (!('x' in obj)) continue;
+                const o = obj as any;
+                this.propertySnapshot.set(obj, {
+                    x: o.x, y: o.y,
+                    rotation: o.rotation ?? 0,
+                    scaleX: o.scaleX ?? 1, scaleY: o.scaleY ?? 1,
+                    originX: o.originX ?? 0.5, originY: o.originY ?? 0.5,
+                    alpha: o.alpha ?? 1, visible: o.visible ?? true,
+                });
+            }
+        }
+    }
+
+    private restoreProperties(): void {
+        for (const [obj, snap] of this.propertySnapshot) {
+            if (!('x' in obj)) continue;
+            const o = obj as any;
+            o.x = snap.x;
+            o.y = snap.y;
+            if ('rotation' in o) o.rotation = snap.rotation;
+            if ('scaleX' in o) o.scaleX = snap.scaleX;
+            if ('scaleY' in o) o.scaleY = snap.scaleY;
+            if ('setOrigin' in o && typeof o.setOrigin === 'function') {
+                o.setOrigin(snap.originX, snap.originY);
+            }
+            if ('alpha' in o) o.alpha = snap.alpha;
+            if ('visible' in o) o.visible = snap.visible;
+        }
+        this.propertySnapshot.clear();
     }
 
     private onSceneShutdown(): void {
