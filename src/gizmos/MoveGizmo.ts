@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import { SnappingEngine, SnapGuide } from '../core/SnappingEngine';
+import type { SnappingConfig } from '../core/EditorState';
 
 export enum DragHandle {
     None = 'none',
@@ -28,6 +30,9 @@ const COLOR_CENTER = 0x44cc44; // green
  */
 export class MoveGizmo {
     private coords: CoordinateSystem;
+    private snappingEngine: SnappingEngine | null = null;
+    private snappingConfig: SnappingConfig | null = null;
+    private selectableObjects: (() => Phaser.GameObjects.GameObject[]) | null = null;
 
     /** Screen-space position of the gizmo center (updated each frame). */
     private cx = 0;
@@ -50,8 +55,28 @@ export class MoveGizmo {
     /** The host scene (game scene) for coordinate conversions. */
     private hostScene: Phaser.Scene | null = null;
 
+    /** Snap guides produced during the last drag update. */
+    private _snapGuides: SnapGuide[] = [];
+
     constructor(coords: CoordinateSystem) {
         this.coords = coords;
+    }
+
+    /**
+     * Configure snapping support. Called once during setup.
+     */
+    setSnapping(
+        engine: SnappingEngine,
+        config: SnappingConfig,
+        getSelectableObjects: () => Phaser.GameObjects.GameObject[],
+    ): void {
+        this.snappingEngine = engine;
+        this.snappingConfig = config;
+        this.selectableObjects = getSelectableObjects;
+    }
+
+    get snapGuides(): SnapGuide[] {
+        return this._snapGuides;
     }
 
     get isDragging(): boolean {
@@ -182,8 +207,25 @@ export class MoveGizmo {
             deltaDesignX = 0;
         }
 
-        const newDesignX = this.objStartDesignX + deltaDesignX;
-        const newDesignY = this.objStartDesignY + deltaDesignY;
+        let newDesignX = this.objStartDesignX + deltaDesignX;
+        let newDesignY = this.objStartDesignY + deltaDesignY;
+
+        // Apply snapping
+        this._snapGuides = [];
+        if (this.snappingEngine && this.snappingConfig) {
+            const allObjects = this.selectableObjects ? this.selectableObjects() : [];
+            const result = this.snappingEngine.applySnapping(
+                { x: newDesignX, y: newDesignY },
+                this.snappingConfig,
+                allObjects,
+                this.coords,
+                this.hostScene,
+                this.target,
+            );
+            newDesignX = result.point.x;
+            newDesignY = result.point.y;
+            this._snapGuides = result.guides;
+        }
 
         this.coords.setDesignPosition(this.target, newDesignX, newDesignY, this.hostScene);
     }
@@ -195,6 +237,7 @@ export class MoveGizmo {
         this.activeHandle = DragHandle.None;
         this.target = null;
         this.hostScene = null;
+        this._snapGuides = [];
     }
 
     destroy(): void {

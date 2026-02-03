@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { EditorState, EditorTool } from '../core/EditorState';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import { SnappingEngine, type SnapGuide } from '../core/SnappingEngine';
 import { MoveGizmo, DragHandle } from './MoveGizmo';
 
 /**
@@ -18,15 +19,25 @@ export class GizmoManager {
         coords: CoordinateSystem,
         game: Phaser.Game,
         hostSceneKey: string,
+        snappingEngine?: SnappingEngine,
+        getSelectableObjects?: () => Phaser.GameObjects.GameObject[],
     ) {
         this.state = state;
         this.game = game;
         this.hostSceneKey = hostSceneKey;
         this.moveGizmo = new MoveGizmo(coords);
+
+        if (snappingEngine && getSelectableObjects) {
+            this.moveGizmo.setSnapping(snappingEngine, state.snapping, getSelectableObjects);
+        }
     }
 
     get isDragging(): boolean {
         return this.moveGizmo.isDragging;
+    }
+
+    get snapGuides(): SnapGuide[] {
+        return this.moveGizmo.snapGuides;
     }
 
     /**

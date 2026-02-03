@@ -3,6 +3,7 @@ import { EditorState } from '../core/EditorState';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { InspectorPanel } from './InspectorPanel';
 import { HierarchyPanel } from './HierarchyPanel';
+import { ToolbarPanel } from './ToolbarPanel';
 
 /**
  * Manages the HTML-based editor UI panels.
@@ -17,6 +18,7 @@ export class EditorUI {
 
     private inspector: InspectorPanel;
     private hierarchy: HierarchyPanel;
+    private toolbar: ToolbarPanel;
 
     constructor(
         state: EditorState,
@@ -33,6 +35,7 @@ export class EditorUI {
 
         this.inspector = new InspectorPanel(container, coords);
         this.hierarchy = new HierarchyPanel(state, game, pausedSceneKeys, container);
+        this.toolbar = new ToolbarPanel(state, container);
 
         // Wire up selection changes
         this.state.on(EditorState.EVENT_SELECTION_CHANGED, this.onSelectionChanged, this);
@@ -63,5 +66,6 @@ export class EditorUI {
         this.state.off(EditorState.EVENT_SELECTION_CHANGED, this.onSelectionChanged, this);
         this.inspector.dispose();
         this.hierarchy.dispose();
+        this.toolbar.dispose();
     }
 }

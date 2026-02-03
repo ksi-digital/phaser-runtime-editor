@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { EditorState } from './core/EditorState';
 import { CoordinateSystem } from './core/CoordinateSystem';
 import { SelectionManager } from './core/SelectionManager';
+import { SnappingEngine } from './core/SnappingEngine';
 import { GizmoManager } from './gizmos/GizmoManager';
 import { EditorUI } from './ui/EditorUI';
 
@@ -44,6 +45,7 @@ export class EditorScene extends Phaser.Scene {
     editorState!: EditorState;
     coordSystem!: CoordinateSystem;
     selectionMgr!: SelectionManager;
+    snappingEngine!: SnappingEngine;
     gizmoMgr!: GizmoManager;
     editorUI!: EditorUI;
 
@@ -70,11 +72,14 @@ export class EditorScene extends Phaser.Scene {
             this.game,
             this.pausedScenes,
         );
+        this.snappingEngine = new SnappingEngine();
         this.gizmoMgr = new GizmoManager(
             this.editorState,
             this.coordSystem,
             this.game,
             this.hostSceneKey,
+            this.snappingEngine,
+            () => this.selectionMgr.getSelectableObjects(),
         );
 
         // --- Visual layers ---
@@ -166,6 +171,13 @@ export class EditorScene extends Phaser.Scene {
         this.drawDesignBounds();
         this.selectionMgr.drawSelection(this.gfx);
         this.gizmoMgr.draw(this.gfx);
+
+        // Render snap guides during drag
+        const hostScene = this.getHostScene();
+        if (hostScene) {
+            this.snappingEngine.drawGuides(this.gfx, this.gizmoMgr.snapGuides, this.coordSystem, hostScene);
+        }
+
         this.editorUI.refresh();
         this.updateCoordBar();
     }
