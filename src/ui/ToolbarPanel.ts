@@ -9,10 +9,12 @@ export class ToolbarPanel {
     private container: HTMLElement;
     private wrapper: HTMLDivElement | null = null;
     private toolButtons = new Map<EditorTool, HTMLButtonElement>();
+    private getChanges: (() => Record<string, Record<string, { from: number | boolean; to: number | boolean }>>) | null;
 
-    constructor(state: EditorState, container: HTMLElement) {
+    constructor(state: EditorState, container: HTMLElement, getChanges: (() => Record<string, Record<string, { from: number | boolean; to: number | boolean }>>) | null) {
         this.state = state;
         this.container = container;
+        this.getChanges = getChanges;
 
         this.createWrapper();
         this.state.on(EditorState.EVENT_TOOL_CHANGED, this.onToolChanged, this);
@@ -78,6 +80,18 @@ export class ToolbarPanel {
 
         this.wrapper.appendChild(snapGroup);
 
+        // Copy Changes button
+        if (this.getChanges) {
+            this.addSeparator();
+            const actionGroup = this.createGroup();
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'pe-tool-btn pe-copy-btn';
+            copyBtn.textContent = 'Copy Changes';
+            copyBtn.addEventListener('click', () => this.onCopyChanges(copyBtn));
+            actionGroup.appendChild(copyBtn);
+            this.wrapper.appendChild(actionGroup);
+        }
+
         // Highlight current tool
         this.updateToolHighlight();
     }
@@ -141,6 +155,15 @@ export class ToolbarPanel {
                 align-items: center;
                 gap: 4px;
             }
+            .pe-copy-btn {
+                background: #2a4a2a !important;
+                border-color: #4a7a4a !important;
+                color: #8c8 !important;
+            }
+            .pe-copy-btn:hover {
+                background: #3a5a3a !important;
+                color: #afa !important;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -203,5 +226,29 @@ export class ToolbarPanel {
 
     private onToolChanged(): void {
         this.updateToolHighlight();
+    }
+
+    private onCopyChanges(btn: HTMLButtonElement): void {
+        if (!this.getChanges) return;
+        const diff = this.getChanges();
+        const count = Object.keys(diff).length;
+
+        if (count === 0) {
+            btn.textContent = 'No changes';
+            setTimeout(() => { btn.textContent = 'Copy Changes'; }, 1500);
+            return;
+        }
+
+        const json = JSON.stringify(diff, null, 2);
+        navigator.clipboard.writeText(json).then(() => {
+            btn.textContent = `Copied! (${count})`;
+            setTimeout(() => { btn.textContent = 'Copy Changes'; }, 1500);
+            console.log(`[PhaserEditor] Copied ${count} changed object(s) to clipboard`);
+        }).catch(() => {
+            // Fallback: log to console
+            console.log('[PhaserEditor] Changes (clipboard unavailable):\n', json);
+            btn.textContent = 'See console';
+            setTimeout(() => { btn.textContent = 'Copy Changes'; }, 1500);
+        });
     }
 }

@@ -15,6 +15,7 @@ interface EditorSceneData {
     hostSceneKey: string;
     pausedScenes: string[];
     hotkey: string;
+    getChanges: () => Record<string, Record<string, { from: number | boolean; to: number | boolean }>>;
 }
 
 /**
@@ -28,6 +29,7 @@ export class EditorScene extends Phaser.Scene {
     private hostSceneKey = '';
     private pausedScenes: string[] = [];
     private hotkey = 'F2';
+    private getChanges: (() => Record<string, Record<string, { from: number | boolean; to: number | boolean }>>) | null = null;
 
     /** Graphics object for drawing gizmos, bounding boxes, grid, etc. */
     private gfx!: Phaser.GameObjects.Graphics;
@@ -56,6 +58,7 @@ export class EditorScene extends Phaser.Scene {
         this.hostSceneKey = data.hostSceneKey ?? '';
         this.pausedScenes = data.pausedScenes ?? [];
         this.hotkey = data.hotkey ?? 'F2';
+        this.getChanges = data.getChanges ?? null;
     }
 
     create(): void {
@@ -111,6 +114,7 @@ export class EditorScene extends Phaser.Scene {
             this.getHostScene()!,
             this.game,
             this.pausedScenes,
+            this.getChanges,
         );
 
         // --- Input: gizmo drag + click to select ---

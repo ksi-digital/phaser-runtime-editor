@@ -1,7 +1,30 @@
 {
-    "name": "phaser-runtime-editor",
+    "name": "@gamotions/phaser-runtime-editor",
     "version": "0.1.0",
+    "description": "A Phaser 3/4 scene plugin that injects a runtime visual editor — drag objects, inspect properties, snap to grid, and export layout coordinates as JSON.",
     "type": "module",
+    "license": "MIT",
+    "author": "gamotions",
+    "keywords": [
+        "phaser",
+        "phaser3",
+        "phaser4",
+        "editor",
+        "runtime-editor",
+        "level-editor",
+        "game-editor",
+        "layout",
+        "inspector",
+        "gamedev"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/gamotions/phaser-runtime-editor.git"
+    },
+    "homepage": "https://github.com/gamotions/phaser-runtime-editor#readme",
+    "bugs": {
+        "url": "https://github.com/gamotions/phaser-runtime-editor/issues"
+    },
     "main": "dist/index.cjs",
     "module": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -14,16 +37,19 @@
     },
     "files": [
         "dist",
-        "src"
+        "src",
+        "LICENSE",
+        "README.md"
     ],
     "scripts": {
         "dev": "vite build --watch",
         "build": "vite build",
         "demo": "vite --config vite.demo.config.ts",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "prepublishOnly": "npm run build"
     },
     "peerDependencies": {
-        "phaser": "^3.60.0 || ^4.0.0"
+        "phaser": "^4.0.0"
     },
     "devDependencies": {
         "phaser": "^4.0.0-rc.6",

@@ -32,6 +32,7 @@ export class EditorUI {
         hostScene: Phaser.Scene,
         game: Phaser.Game,
         pausedSceneKeys: string[],
+        getChanges: (() => Record<string, Record<string, { from: number | boolean; to: number | boolean }>>) | null,
     ) {
         this.state = state;
         this.coords = coords;
@@ -39,7 +40,7 @@ export class EditorUI {
 
         this.inspector = new InspectorPanel(slots.inspector, coords);
         this.hierarchy = new HierarchyPanel(state, game, pausedSceneKeys, slots.hierarchy);
-        this.toolbar = new ToolbarPanel(state, slots.toolbar);
+        this.toolbar = new ToolbarPanel(state, slots.toolbar, getChanges);
 
         // Wire up selection changes
         this.state.on(EditorState.EVENT_SELECTION_CHANGED, this.onSelectionChanged, this);

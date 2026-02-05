@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 import { EditorScene } from './EditorScene';
+import { SelectionManager } from './core/SelectionManager';
+
+export type ChangeDiff = Record<string, Record<string, { from: number | boolean; to: number | boolean }>>;
 
 export interface EditorPluginConfig {
     /** Base design width (default: 720) */
@@ -156,6 +159,7 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
             hostSceneKey: hostKey,
             pausedScenes: Array.from(this.pausedScenes),
             hotkey: this.config.hotkey,
+            getChanges: () => this.getChanges(),
         });
 
         // Now pause all game scenes
@@ -299,6 +303,49 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
             }
         }
         this.propertySnapshot.clear();
+    }
+
+    /**
+     * Compare current object properties against the snapshot taken on activate.
+     * Returns a diff of only the properties that changed.
+     */
+    getChanges(): ChangeDiff {
+        const diff: ChangeDiff = {};
+        const round = (v: number) => Math.round(v * 100) / 100;
+        const PROPS: Array<{ key: string; isBool?: boolean }> = [
+            { key: 'x' }, { key: 'y' },
+            { key: 'rotation' },
+            { key: 'scaleX' }, { key: 'scaleY' },
+            { key: 'originX' }, { key: 'originY' },
+            { key: 'alpha' },
+            { key: 'visible', isBool: true },
+        ];
+
+        for (const [obj, snap] of this.propertySnapshot) {
+            if (!('x' in obj)) continue;
+            const o = obj as any;
+            const name = SelectionManager.getObjectName(obj);
+            const changes: Record<string, { from: number | boolean; to: number | boolean }> = {};
+
+            for (const prop of PROPS) {
+                const snapVal = (snap as any)[prop.key];
+                const curVal = o[prop.key];
+                if (prop.isBool) {
+                    if (snapVal !== curVal) {
+                        changes[prop.key] = { from: snapVal, to: curVal };
+                    }
+                } else {
+                    if (round(snapVal) !== round(curVal)) {
+                        changes[prop.key] = { from: round(snapVal), to: round(curVal) };
+                    }
+                }
+            }
+
+            if (Object.keys(changes).length > 0) {
+                diff[name] = changes;
+            }
+        }
+        return diff;
     }
 
     private onSceneShutdown(): void {

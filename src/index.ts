@@ -15,7 +15,7 @@ export { ToolbarPanel } from './ui/ToolbarPanel';
 export { SnappingEngine } from './core/SnappingEngine';
 export { EditorFrame } from './ui/EditorFrame';
 
-export type { EditorPluginConfig } from './PhaserEditorPlugin';
+export type { EditorPluginConfig, ChangeDiff } from './PhaserEditorPlugin';
 export type { EditorUISlots } from './ui/EditorUI';
 export type { SnappingConfig } from './core/EditorState';
 export type { SnapGuide } from './core/SnappingEngine';

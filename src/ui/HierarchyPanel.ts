@@ -31,6 +31,9 @@ export class HierarchyPanel {
     /** Maps DOM row elements to game objects for click handling. */
     private rowMap = new Map<HTMLElement, Phaser.GameObjects.GameObject>();
 
+    /** Tracks which rows are hit area sub-entries (subset of rowMap keys). */
+    private hitAreaRows = new Set<HTMLElement>();
+
     /** Tracks the currently highlighted row element. */
     private selectedRow: HTMLElement | null = null;
 
@@ -48,8 +51,9 @@ export class HierarchyPanel {
         this.createWrapper();
         this.buildTree();
 
-        // Listen for selection changes to highlight the correct row
+        // Listen for selection / hit-area-edit changes to highlight the correct row
         this.state.on(EditorState.EVENT_SELECTION_CHANGED, this.onSelectionChanged, this);
+        this.state.on(EditorState.EVENT_HIT_AREA_EDIT_CHANGED, this.onSelectionChanged, this);
     }
 
     /**
@@ -68,7 +72,9 @@ export class HierarchyPanel {
 
     dispose(): void {
         this.state.off(EditorState.EVENT_SELECTION_CHANGED, this.onSelectionChanged, this);
+        this.state.off(EditorState.EVENT_HIT_AREA_EDIT_CHANGED, this.onSelectionChanged, this);
         this.rowMap.clear();
+        this.hitAreaRows.clear();
         this.selectedRow = null;
         if (this.wrapper) {
             this.wrapper.remove();
@@ -134,6 +140,10 @@ export class HierarchyPanel {
                 background: rgba(68, 136, 255, 0.35);
                 color: #fff;
             }
+            .pe-row.pe-ha-selected {
+                background: rgba(255, 170, 0, 0.35);
+                color: #ffcc00;
+            }
             .pe-toggle {
                 width: 16px;
                 flex-shrink: 0;
@@ -188,6 +198,7 @@ export class HierarchyPanel {
 
         // Clear existing content
         this.rowMap.clear();
+        this.hitAreaRows.clear();
         this.selectedRow = null;
         this.wrapper.innerHTML = '';
 
@@ -328,6 +339,7 @@ export class HierarchyPanel {
                 this.state.editingHitArea = true;
             });
             this.rowMap.set(haRow, obj);
+            this.hitAreaRows.add(haRow);
             haLi.appendChild(haRow);
             parentUl.appendChild(haLi);
         }
@@ -337,21 +349,43 @@ export class HierarchyPanel {
         // Remove previous highlight
         if (this.selectedRow) {
             this.selectedRow.classList.remove('pe-selected');
+            this.selectedRow.classList.remove('pe-ha-selected');
             this.selectedRow = null;
         }
 
         if (!this.state.selected) return;
 
-        // Find the row matching the selected object
-        for (const [row, obj] of this.rowMap) {
-            if (obj === this.state.selected) {
-                row.classList.add('pe-selected');
-                this.selectedRow = row;
+        const wantHitArea = this.state.editingHitArea;
+        let fallback: HTMLElement | null = null;
 
-                // Scroll into view if needed
+        // Find the row matching the selected object and edit mode
+        for (const [row, obj] of this.rowMap) {
+            if (obj !== this.state.selected) continue;
+            const isHaRow = this.hitAreaRows.has(row);
+
+            if (wantHitArea && isHaRow) {
+                // Exact match: editing hit area and this is the hit area row
+                this.selectedRow = row;
+                row.classList.add('pe-ha-selected');
                 row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-                break;
+                return;
             }
+            if (!wantHitArea && !isHaRow) {
+                // Exact match: not editing hit area and this is the object row
+                this.selectedRow = row;
+                row.classList.add('pe-selected');
+                row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                return;
+            }
+            // Keep as fallback in case we don't find an exact match
+            if (!fallback) fallback = row;
+        }
+
+        // Fallback: highlight whatever row we found for this object
+        if (fallback) {
+            this.selectedRow = fallback;
+            fallback.classList.add(wantHitArea ? 'pe-ha-selected' : 'pe-selected');
+            fallback.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
     }
 
