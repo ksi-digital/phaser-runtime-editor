@@ -3,21 +3,58 @@ import Phaser from 'phaser';
 const DESIGN_WIDTH = 720;
 const DESIGN_HEIGHT = 1280;
 
+// Physics constants (design-space units)
+const GRAVITY = 1800;
+const JUMP_VEL = -1200;
+const MOVE_SPEED = 300;
+const PLAYER_HALF_W = 24;
+const PLAYER_HALF_H = 55;
+const GROUND_TOP = 1120; // ground center at 1200, half-height 80
+
+interface CoinData {
+    obj: Phaser.GameObjects.Image;
+    designX: number;
+    designY: number;
+    baseDesignY: number;
+    collected: boolean;
+    bobOffset: number;
+}
+
+interface PlatformData {
+    designX: number;
+    designY: number;
+    designW: number;
+}
+
 /**
- * A simple demo scene with a variety of game objects for testing the editor.
- *
- * Objects created (all positioned in design-space coordinates):
- * - Sky background gradient
- * - Ground platform
- * - Score + Level text (HUD)
- * - Settings button (top-right)
- * - Player Container (body + head + eyes)
- * - 3 floating platforms
- * - 3 coins with bob tweens (tests pause/resume)
- * - Health bar Container (background + fill)
- * - A dialog box (higher depth, like a popup)
+ * A playable demo scene — arrow keys to move, space to jump.
+ * Collect coins by touching them, land on platforms.
+ * Press F2 to open the editor.
  */
 export class DemoScene extends Phaser.Scene {
+    // Scale factor & offset (design → screen)
+    private sf = 1;
+    private ox = 0;
+    private oy = 0;
+
+    // Player state (design-space)
+    private playerContainer!: Phaser.GameObjects.Container;
+    private playerDesignX = 360;
+    private playerDesignY = 1060;
+    private velY = 0;
+    private grounded = false;
+    private facingRight = true;
+
+    // Game objects we need in update()
+    private scoreText!: Phaser.GameObjects.Text;
+    private score = 0;
+    private coins: CoinData[] = [];
+    private platforms: PlatformData[] = [];
+
+    // Input
+    private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+    private spaceKey!: Phaser.Input.Keyboard.Key;
+
     constructor() {
         super({ key: 'DemoScene' });
     }
@@ -26,14 +63,19 @@ export class DemoScene extends Phaser.Scene {
         this.generateTextures();
 
         const { width, height } = this.cameras.main;
-        const sf = Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT);
-        const ox = (width - DESIGN_WIDTH * sf) / 2;
-        const oy = (height - DESIGN_HEIGHT * sf) / 2;
+        this.sf = Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT);
+        this.ox = (width - DESIGN_WIDTH * this.sf) / 2;
+        this.oy = (height - DESIGN_HEIGHT * this.sf) / 2;
+        const sf = this.sf;
 
         const toScreen = (dx: number, dy: number) => ({
-            x: ox + dx * sf,
-            y: oy + dy * sf,
+            x: this.ox + dx * sf,
+            y: this.oy + dy * sf,
         });
+
+        // --- Input ---
+        this.cursors = this.input.keyboard!.createCursorKeys();
+        this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
         // --- Background (depth 0) ---
         const sky = this.add.image(width / 2, height / 2, 'sky');
@@ -47,6 +89,7 @@ export class DemoScene extends Phaser.Scene {
         ground.setDisplaySize(DESIGN_WIDTH * sf, 160 * sf);
         ground.setDepth(1);
         ground.setName('ground');
+        ground.setInteractive(new Phaser.Geom.Rectangle(0, 0, 64, 16), Phaser.Geom.Rectangle.Contains);
 
         // --- Platforms (depth 3) ---
         const platformData = [
@@ -54,85 +97,105 @@ export class DemoScene extends Phaser.Scene {
             { x: 540, y: 750, w: 200, name: 'platform_right' },
             { x: 360, y: 600, w: 250, name: 'platform_center' },
         ];
+        this.platforms = platformData.map((p) => ({ designX: p.x, designY: p.y, designW: p.w }));
+
         for (const p of platformData) {
             const pos = toScreen(p.x, p.y);
             const plat = this.add.image(pos.x, pos.y, 'platform');
             plat.setDisplaySize(p.w * sf, 32 * sf);
             plat.setDepth(3);
             plat.setName(p.name);
+            plat.setInteractive(new Phaser.Geom.Rectangle(4, 0, 56, 16), Phaser.Geom.Rectangle.Contains);
         }
 
-        // --- Coins with tween (depth 4) ---
+        // --- Coins (depth 4) ---
         const coinPositions = [
             { x: 180, y: 860, name: 'coin_1' },
             { x: 540, y: 710, name: 'coin_2' },
             { x: 360, y: 560, name: 'coin_3' },
         ];
+        this.coins = [];
         for (const c of coinPositions) {
             const pos = toScreen(c.x, c.y);
             const coin = this.add.image(pos.x, pos.y, 'coin');
             coin.setDisplaySize(36 * sf, 36 * sf);
             coin.setDepth(4);
             coin.setName(c.name);
+            coin.setInteractive(new Phaser.Geom.Circle(16, 16, 14), Phaser.Geom.Circle.Contains);
 
-            this.tweens.add({
-                targets: coin,
-                y: pos.y - 12 * sf,
-                duration: 800,
-                yoyo: true,
-                repeat: -1,
-                ease: 'Sine.easeInOut',
+            this.coins.push({
+                obj: coin,
+                designX: c.x,
+                designY: c.y,
+                baseDesignY: c.y,
+                collected: false,
+                bobOffset: Math.random() * Math.PI * 2,
             });
         }
 
         // --- Player Container (depth 5) ---
-        const playerPos = toScreen(360, 1060);
+        this.playerDesignX = 360;
+        this.playerDesignY = 1060;
+        this.velY = 0;
+        this.grounded = false;
+
+        const playerPos = toScreen(this.playerDesignX, this.playerDesignY);
         const body = this.add.image(0, 0, 'player_body');
         body.setDisplaySize(60 * sf, 80 * sf);
         body.setName('player_body');
 
-        const head = this.add.image(0, -55 * sf, 'player_head');
-        head.setDisplaySize(48 * sf, 48 * sf);
-        head.setName('player_head');
+        const headImg = this.add.image(0, 0, 'player_head');
+        headImg.setDisplaySize(48 * sf, 48 * sf);
+        headImg.setName('player_head_sprite');
 
-        const eyeL = this.add.image(-10 * sf, -58 * sf, 'eye');
+        const eyeL = this.add.image(-10 * sf, -3 * sf, 'eye');
         eyeL.setDisplaySize(8 * sf, 10 * sf);
         eyeL.setName('player_eye_left');
 
-        const eyeR = this.add.image(10 * sf, -58 * sf, 'eye');
+        const eyeR = this.add.image(10 * sf, -3 * sf, 'eye');
         eyeR.setDisplaySize(8 * sf, 10 * sf);
         eyeR.setName('player_eye_right');
 
-        const player = this.add.container(playerPos.x, playerPos.y, [body, head, eyeL, eyeR]);
+        const head = this.add.container(0, -55 * sf, [headImg, eyeL, eyeR]);
+        head.setSize(48 * sf, 48 * sf);
+        head.setName('player_head');
+
+        const player = this.add.container(playerPos.x, playerPos.y, [body, head]);
         player.setDepth(5);
         player.setName('player');
         player.setSize(60 * sf, 130 * sf);
-
-        // Idle bob for the player
-        this.tweens.add({
-            targets: player,
-            y: playerPos.y - 6 * sf,
-            duration: 1200,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut',
-        });
+        player.setInteractive(
+            new Phaser.Geom.Polygon([
+                0, -80 * sf,
+                24 * sf, -50 * sf,
+                30 * sf, 0,
+                28 * sf, 40 * sf,
+                12 * sf, 65 * sf,
+                -12 * sf, 65 * sf,
+                -28 * sf, 40 * sf,
+                -30 * sf, 0,
+                -24 * sf, -50 * sf,
+            ]),
+            Phaser.Geom.Polygon.Contains,
+        );
+        this.playerContainer = player;
 
         // --- HUD: Score text (depth 10) ---
         const scorePos = toScreen(20, 20);
-        const scoreText = this.add.text(scorePos.x, scorePos.y, 'Score: 1234', {
+        this.score = 0;
+        this.scoreText = this.add.text(scorePos.x, scorePos.y, 'Score: 0', {
             fontFamily: 'Arial, sans-serif',
             fontSize: `${Math.round(28 * sf)}px`,
             color: '#ffffff',
             stroke: '#000000',
             strokeThickness: Math.round(4 * sf),
         });
-        scoreText.setDepth(10);
-        scoreText.setName('hud_score');
+        this.scoreText.setDepth(10);
+        this.scoreText.setName('hud_score');
 
         // --- HUD: Level text (depth 10) ---
         const levelPos = toScreen(DESIGN_WIDTH / 2, 20);
-        const levelText = this.add.text(levelPos.x, levelPos.y, 'Level 5', {
+        const levelText = this.add.text(levelPos.x, levelPos.y, 'Level 1', {
             fontFamily: 'Arial, sans-serif',
             fontSize: `${Math.round(24 * sf)}px`,
             color: '#ffdd44',
@@ -161,6 +224,7 @@ export class DemoScene extends Phaser.Scene {
         settingsBtn.setDepth(10);
         settingsBtn.setName('settings_button');
         settingsBtn.setSize(56 * sf, 56 * sf);
+        settingsBtn.setInteractive(new Phaser.Geom.Circle(0, 0, 28 * sf), Phaser.Geom.Circle.Contains);
 
         // --- Health bar Container (depth 10) ---
         const hpPos = toScreen(20, 60);
@@ -179,7 +243,7 @@ export class DemoScene extends Phaser.Scene {
         hpBar.setName('health_bar');
         hpBar.setSize(200 * sf, 20 * sf);
 
-        // --- Dialog box (depth 20) — a popup-like element ---
+        // --- Dialog box (depth 20) ---
         const dlgPos = toScreen(DESIGN_WIDTH / 2, DESIGN_HEIGHT / 2);
         const dlgBg = this.add.image(0, 0, 'dialog_bg');
         dlgBg.setDisplaySize(500 * sf, 300 * sf);
@@ -195,13 +259,18 @@ export class DemoScene extends Phaser.Scene {
         dlgTitle.setOrigin(0.5, 0.5);
         dlgTitle.setName('dialog_title');
 
-        const dlgBody = this.add.text(0, -20 * sf, 'Press F2 to open the editor.\nDrag objects to reposition them.', {
-            fontFamily: 'Arial, sans-serif',
-            fontSize: `${Math.round(22 * sf)}px`,
-            color: '#cccccc',
-            align: 'center',
-            lineSpacing: 8 * sf,
-        });
+        const dlgBody = this.add.text(
+            0,
+            -20 * sf,
+            'Arrow keys to move, Space to jump.\nCollect the coins!\nPress F2 to open the editor.',
+            {
+                fontFamily: 'Arial, sans-serif',
+                fontSize: `${Math.round(22 * sf)}px`,
+                color: '#cccccc',
+                align: 'center',
+                lineSpacing: 8 * sf,
+            },
+        );
         dlgBody.setOrigin(0.5, 0.5);
         dlgBody.setName('dialog_body');
 
@@ -222,19 +291,24 @@ export class DemoScene extends Phaser.Scene {
         dialog.setName('dialog_welcome');
         dialog.setSize(500 * sf, 300 * sf);
 
-        // Make OK button dismiss dialog
         dlgBtnBg.setInteractive();
         dlgBtnBg.on('pointerdown', () => {
             dialog.setVisible(false);
         });
 
-        // --- A decorative cloud with tween (depth 2) ---
+        // --- Clouds with tween (depth 2) ---
         const cloudPos = toScreen(150, 200);
         const cloud = this.add.image(cloudPos.x, cloudPos.y, 'cloud');
         cloud.setDisplaySize(120 * sf, 60 * sf);
         cloud.setAlpha(0.8);
         cloud.setDepth(2);
         cloud.setName('cloud_1');
+        cloud.setInteractive(
+            new Phaser.Geom.Polygon([
+                10, 40, 5, 30, 15, 15, 40, 5, 60, 2, 80, 5, 105, 15, 115, 30, 110, 40,
+            ]),
+            Phaser.Geom.Polygon.Contains,
+        );
 
         this.tweens.add({
             targets: cloud,
@@ -264,11 +338,105 @@ export class DemoScene extends Phaser.Scene {
         console.log('[DemoScene] Created — objects:', this.children.list.length);
     }
 
+    update(_time: number, delta: number): void {
+        const dt = Math.min(delta / 1000, 0.05); // cap at 50ms to avoid tunneling
+        const sf = this.sf;
+
+        // --- Horizontal movement ---
+        let moveX = 0;
+        if (this.cursors.left.isDown) moveX = -1;
+        else if (this.cursors.right.isDown) moveX = 1;
+
+        this.playerDesignX += moveX * MOVE_SPEED * dt;
+
+        // Clamp to design bounds
+        this.playerDesignX = Phaser.Math.Clamp(
+            this.playerDesignX,
+            PLAYER_HALF_W,
+            DESIGN_WIDTH - PLAYER_HALF_W,
+        );
+
+        // Flip sprite direction
+        if (moveX !== 0) {
+            const wantRight = moveX > 0;
+            if (wantRight !== this.facingRight) {
+                this.facingRight = wantRight;
+                this.playerContainer.setScale(wantRight ? 1 : -1, 1);
+            }
+        }
+
+        // --- Jump ---
+        if (this.grounded && Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+            this.velY = JUMP_VEL;
+            this.grounded = false;
+        }
+
+        // --- Gravity ---
+        this.velY += GRAVITY * dt;
+        this.playerDesignY += this.velY * dt;
+
+        // --- Platform collision (one-way: only from above) ---
+        const feetY = this.playerDesignY + PLAYER_HALF_H;
+        const prevFeetY = feetY - this.velY * dt;
+
+        this.grounded = false;
+
+        for (const plat of this.platforms) {
+            const platTop = plat.designY - 16; // platform half-height = 16
+            const platLeft = plat.designX - plat.designW / 2;
+            const platRight = plat.designX + plat.designW / 2;
+
+            if (
+                this.velY >= 0 &&
+                prevFeetY <= platTop &&
+                feetY >= platTop &&
+                this.playerDesignX + PLAYER_HALF_W > platLeft &&
+                this.playerDesignX - PLAYER_HALF_W < platRight
+            ) {
+                this.playerDesignY = platTop - PLAYER_HALF_H;
+                this.velY = 0;
+                this.grounded = true;
+                break;
+            }
+        }
+
+        // --- Ground collision ---
+        if (this.playerDesignY + PLAYER_HALF_H >= GROUND_TOP) {
+            this.playerDesignY = GROUND_TOP - PLAYER_HALF_H;
+            this.velY = 0;
+            this.grounded = true;
+        }
+
+        // --- Update player screen position ---
+        this.playerContainer.x = this.ox + this.playerDesignX * sf;
+        this.playerContainer.y = this.oy + this.playerDesignY * sf;
+
+        // --- Coin collection ---
+        for (const c of this.coins) {
+            if (c.collected) continue;
+
+            // Bob animation (manual sine wave)
+            c.designY = c.baseDesignY + Math.sin(_time / 400 + c.bobOffset) * 6;
+            c.obj.x = this.ox + c.designX * sf;
+            c.obj.y = this.oy + c.designY * sf;
+
+            // AABB overlap check in design-space
+            const dx = Math.abs(this.playerDesignX - c.designX);
+            const dy = Math.abs(this.playerDesignY - c.designY);
+            if (dx < PLAYER_HALF_W + 18 && dy < PLAYER_HALF_H + 18) {
+                c.collected = true;
+                c.obj.setVisible(false);
+                this.score += 100;
+                this.scoreText.setText(`Score: ${this.score}`);
+            }
+        }
+    }
+
     /**
      * Generate all textures procedurally so the demo needs zero asset files.
      */
     private generateTextures(): void {
-        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        const g = this.make.graphics({ x: 0, y: 0 }, false);
 
         // Sky gradient
         g.clear();

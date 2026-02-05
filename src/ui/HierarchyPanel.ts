@@ -118,8 +118,6 @@ export class HierarchyPanel {
             }
             .pe-tree ul {
                 list-style: none;
-                margin: 0;
-                padding: 0;
             }
             .pe-row {
                 display: flex;
@@ -174,7 +172,9 @@ export class HierarchyPanel {
                 padding-right: 4px;
             }
             .pe-children {
-                padding-left: 14px;
+                padding-left: 8px;
+                margin-left: 8px;
+                border-left: 2px solid #68f;
             }
             .pe-children.pe-collapsed {
                 display: none;

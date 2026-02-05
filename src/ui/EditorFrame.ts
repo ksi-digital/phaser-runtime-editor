@@ -127,23 +127,35 @@ export class EditorFrame {
         const canvas = this.game.canvas;
         const scale = this.game.scale as any;
 
-        // Move canvas back
-        if (this.originalNextSibling) {
+        // Remove frame first so it stops covering the viewport
+        this.frameEl.remove();
+
+        // Move canvas back to its original DOM position
+        if (this.originalNextSibling && this.originalNextSibling.parentNode === this.originalParent) {
             this.originalParent.insertBefore(canvas, this.originalNextSibling);
         } else {
             this.originalParent.appendChild(canvas);
         }
 
-        // Restore ScaleManager
+        // Restore ScaleManager state
         scale.parent = this.savedParent;
         scale.parentIsWindow = this.savedParentIsWindow;
         scale.autoCenter = this.savedAutoCenter;
         canvas.style.marginLeft = this.savedMarginLeft;
         canvas.style.marginTop = this.savedMarginTop;
-        scale.refresh();
 
-        // Remove frame
-        this.frameEl.remove();
+        // Explicitly provide the correct parent dimensions.
+        // We can't rely on scale.refresh() alone because when parent is
+        // document.body (parentIsWindow), the body's height is content-
+        // dependent and the canvas still has its editor-reduced size,
+        // creating a circular dependency.
+        const parentW = this.savedParentIsWindow
+            ? window.innerWidth
+            : this.savedParent.getBoundingClientRect().width;
+        const parentH = this.savedParentIsWindow
+            ? window.innerHeight
+            : this.savedParent.getBoundingClientRect().height;
+        scale.setParentSize(parentW, parentH);
     }
 
     private createSlot(className: string, css: string): HTMLDivElement {

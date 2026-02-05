@@ -105,7 +105,7 @@ export class InspectorPanel {
 
         // --- Origin folder ---
         if ('originX' in obj) {
-            const origin = this.pane.addFolder({ title: 'Origin', expanded: false });
+            const origin = this.pane.addFolder({ title: 'Origin', expanded: true });
             origin.addBinding(this.params, 'originX', { min: 0, max: 1, step: 0.05, label: 'originX' })
                 .on('change', () => this.applyOrigin());
             origin.addBinding(this.params, 'originY', { min: 0, max: 1, step: 0.05, label: 'originY' })
@@ -113,7 +113,7 @@ export class InspectorPanel {
         }
 
         // --- Display folder ---
-        const display = this.pane.addFolder({ title: 'Display', expanded: false });
+        const display = this.pane.addFolder({ title: 'Display', expanded: true });
         display.addBinding(this.params, 'alpha', { min: 0, max: 1, step: 0.05, label: 'alpha' })
             .on('change', () => this.applyDisplay());
         display.addBinding(this.params, 'visible', { label: 'visible' })
@@ -121,7 +121,7 @@ export class InspectorPanel {
         display.addBinding(this.params, 'depth', { readonly: true, label: 'depth' });
 
         // --- Info folder ---
-        const info = this.pane.addFolder({ title: 'Info', expanded: false });
+        const info = this.pane.addFolder({ title: 'Info', expanded: true });
         info.addBinding(this.params, 'name', { readonly: true, label: 'name' });
         info.addBinding(this.params, 'type', { readonly: true, label: 'type' });
         if (this.params.texture) {

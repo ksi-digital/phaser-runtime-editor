@@ -211,15 +211,26 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
             if (!scene) continue;
 
             for (const obj of scene.children.list) {
-                if (!('x' in obj)) continue;
-                const o = obj as any;
-                this.propertySnapshot.set(obj, {
-                    x: o.x, y: o.y,
-                    rotation: o.rotation ?? 0,
-                    scaleX: o.scaleX ?? 1, scaleY: o.scaleY ?? 1,
-                    originX: o.originX ?? 0.5, originY: o.originY ?? 0.5,
-                    alpha: o.alpha ?? 1, visible: o.visible ?? true,
-                });
+                this.snapshotObject(obj);
+            }
+        }
+    }
+
+    private snapshotObject(obj: Phaser.GameObjects.GameObject): void {
+        if (!('x' in obj)) return;
+        const o = obj as any;
+        this.propertySnapshot.set(obj, {
+            x: o.x, y: o.y,
+            rotation: o.rotation ?? 0,
+            scaleX: o.scaleX ?? 1, scaleY: o.scaleY ?? 1,
+            originX: o.originX ?? 0.5, originY: o.originY ?? 0.5,
+            alpha: o.alpha ?? 1, visible: o.visible ?? true,
+        });
+
+        // Recurse into Container children
+        if (o instanceof Phaser.GameObjects.Container && o.list) {
+            for (const child of o.list) {
+                this.snapshotObject(child);
             }
         }
     }

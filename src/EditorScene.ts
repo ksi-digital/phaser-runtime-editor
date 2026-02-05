@@ -242,13 +242,19 @@ export class EditorScene extends Phaser.Scene {
 
     /**
      * Called when this scene is stopped (editor deactivated).
+     * Each cleanup step is guarded so a failure in one doesn't
+     * prevent the rest (especially editorFrame) from running.
      */
     private onShutdown(): void {
-        this.editorUI?.destroy();
-        this.gizmoMgr?.destroy();
-        this.editorState?.destroy();
-        this.selectionMgr?.destroy();
-        this.editorFrame?.destroy();
+        const safeDestroy = (fn: () => void) => {
+            try { fn(); } catch (e) { console.error('[EditorScene] cleanup error:', e); }
+        };
+
+        safeDestroy(() => this.editorUI?.destroy());
+        safeDestroy(() => this.gizmoMgr?.destroy());
+        safeDestroy(() => this.editorState?.destroy());
+        safeDestroy(() => this.selectionMgr?.destroy());
+        safeDestroy(() => this.editorFrame?.destroy());
         this.scale.off('resize', this.onResize, this);
     }
 }

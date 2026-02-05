@@ -4,7 +4,7 @@
 
 A Phaser Scene Plugin (`phaser-runtime-editor`) that injects a runtime visual editor into any Phaser 3/4 game. Press F2 to pause the game, drag objects to reposition them, inspect/edit properties, and export coordinates as JSON. Ships as a separate npm package.
 
-**Current status:** Phase 4 complete (inspector panel with Tweakpane). Phase 5 (hierarchy panel) is next.
+**Current status:** Phase 6 complete (snapping engine and toolbar panel). Phase 7 (rotate + scale gizmos) and Phase 7b (hit area visualization) are next.
 
 ## Build & Dev Commands
 
@@ -21,23 +21,32 @@ npx.cmd tsc --noEmit                     # Type-check without emitting
 
 ### Demo game (primary)
 
-A self-contained demo lives in `demo/` with procedurally generated textures (no asset files). Run with `npm run demo` → opens `http://localhost:5199/`.
+A playable mini-platformer lives in `demo/` with procedurally generated textures (no asset files). Run with `npm run demo` → opens `http://localhost:5199/`.
 
-Demo scene objects (16 total, design space 720x1280):
+**Controls:** Arrow keys to move, Space to jump. Collect coins for score. Press F2 to toggle editor.
 
-| Object | Type | Depth | Notes |
-|--------|------|-------|-------|
-| `sky_background` | Image | 0 | Full-screen gradient |
-| `ground` | Image | 1 | Bottom platform |
-| `cloud_1`, `cloud_2` | Image | 2 | Tweened horizontally (tests pause/resume) |
-| `platform_left/right/center` | Image | 3 | Static platforms |
-| `coin_1/2/3` | Image | 4 | Tweened bob (tests pause/resume) |
-| `player` | Container | 5 | 4 children: `player_body`, `player_head`, `player_eye_left`, `player_eye_right` |
-| `hud_score` | Text | 10 | "Score: 1234" |
-| `hud_level` | Text | 10 | "Level 5" |
-| `health_bar` | Container | 10 | 2 children: `hp_background`, `hp_fill` |
-| `settings_button` | Container | 10 | 2 children: `settings_bg`, `settings_icon` |
-| `dialog_welcome` | Container | 20 | 5 children: background, title, body, button bg, button text. OK dismisses. |
+**Physics:** Manual design-space physics (no Arcade Physics). Gravity, one-way platform collision (land from above, jump through from below), AABB coin collection. All physics runs in `update()` with delta-time.
+
+Demo scene objects (design space 720x1280):
+
+| Object | Type | Depth | Hit Area | Notes |
+|--------|------|-------|----------|-------|
+| `sky_background` | Image | 0 | — | Full-screen gradient |
+| `ground` | Image | 1 | Rectangle | Bottom platform, `Geom.Rectangle(0,0,64,16)` |
+| `cloud_1` | Image | 2 | Polygon | 9-vertex cloud silhouette, tweened horizontally |
+| `cloud_2` | Image | 2 | — | Tweened horizontally (no hit area, tests "no mask" case) |
+| `platform_left/right/center` | Image | 3 | Rectangle | `Geom.Rectangle(4,0,56,16)`, one-way platforms |
+| `coin_1/2/3` | Image | 4 | Circle | `Geom.Circle(16,16,14)`, manual sine bob, collectible |
+| `player` | Container | 5 | Polygon | 9-vertex silhouette; keyboard-controlled |
+| `player_body` | Image | — | — | Child of `player` |
+| `player_head` | Container | — | — | Child of `player`, contains head sprite + eyes |
+| `player_head_sprite` | Image | — | — | Child of `player_head` |
+| `player_eye_left/right` | Image | — | — | Children of `player_head` (nested container) |
+| `hud_score` | Text | 10 | — | "Score: 0", updates on coin collection |
+| `hud_level` | Text | 10 | — | "Level 1" |
+| `health_bar` | Container | 10 | — | 2 children: `hp_background`, `hp_fill` |
+| `settings_button` | Container | 10 | Circle | `Geom.Circle(0,0,28*sf)` |
+| `dialog_welcome` | Container | 20 | — | OK button has default rect interactive. Dismisses on click. |
 
 ### Mahjong game (secondary)
 
@@ -60,7 +69,7 @@ phaser-runtime-editor/
 ├── vite.demo.config.ts       ✅ Demo dev server on port 5199
 │
 ├── src/
-│   ├── index.ts              ✅ Public API exports (9 classes/enums + 2 types)
+│   ├── index.ts              ✅ Public API exports (13 classes/enums + 4 types)
 │   ├── PhaserEditorPlugin.ts ✅ Scene Plugin — toggle/activate/deactivate + property snapshot/restore
 │   ├── EditorScene.ts        ✅ Overlay scene — selection, coord bar, gizmo rendering, UI lifecycle
 │   │
@@ -68,7 +77,7 @@ phaser-runtime-editor/
 │   │   ├── EditorState.ts    ✅ Selection state, active tool, snapping config, events
 │   │   ├── CoordinateSystem.ts ✅ Design↔screen conversion, Container-aware positioning
 │   │   ├── SelectionManager.ts ✅ Hit-test (skips invisible), bounding box, Container union bounds
-│   │   ├── SnappingEngine.ts 📋 Phase 6
+│   │   ├── SnappingEngine.ts ✅ Grid/object snapping in design-space, guide line rendering
 │   │   └── UndoManager.ts    📋 Phase 9
 │   │
 │   ├── gizmos/
@@ -80,9 +89,9 @@ phaser-runtime-editor/
 │   ├── ui/
 │   │   ├── EditorUI.ts       ✅ Manages panel lifecycle, wires selection events
 │   │   ├── InspectorPanel.ts ✅ Tweakpane 4.x property editor (Transform, Origin, Display, Info)
-│   │   ├── CoordinateBar.ts  📋 Phase 5 (currently inline in EditorScene, will extract)
-│   │   ├── HierarchyPanel.ts 📋 Phase 5
-│   │   └── ToolbarPanel.ts   📋 Phase 6
+│   │   ├── HierarchyPanel.ts ✅ Left sidebar tree view, expand/collapse, visibility toggle
+│   │   ├── ToolbarPanel.ts   ✅ Top bar with tool buttons and snapping controls
+│   │   └── EditorFrame.ts    ✅ CSS grid layout, canvas wrapper, panel slots
 │   │
 │   └── serialization/
 │       ├── LayoutSchema.ts   📋 Phase 8
@@ -92,7 +101,7 @@ phaser-runtime-editor/
 ├── demo/
 │   ├── index.html            ✅ HTML entry
 │   ├── main.ts               ✅ Phaser config + plugin registration
-│   └── DemoScene.ts          ✅ Procedural textures, 16 varied objects
+│   └── DemoScene.ts          ✅ Playable platformer, procedural textures, hit areas on objects
 │
 └── dist/                     ✅ Built output
     ├── index.js              (~216 kB ES module, includes bundled Tweakpane)
@@ -136,23 +145,29 @@ EditorScene (Phaser.Scene, key: '__PhaserEditorScene__')
 │   ├── editorState: EditorState          — selection, tool, events
 │   ├── coordSystem: CoordinateSystem     — design↔screen math
 │   ├── selectionMgr: SelectionManager    — hit-test, bounds, drawing
-│   ├── gizmoMgr: GizmoManager           — move gizmo, pointer delegation
-│   └── editorUI: EditorUI               — Tweakpane inspector panel
+│   ├── gizmoMgr: GizmoManager           — move gizmo, pointer delegation, snapping
+│   ├── snappingEngine: SnappingEngine   — grid/object snapping, guide rendering
+│   ├── editorFrame: EditorFrame         — CSS grid layout, canvas wrapper
+│   └── editorUI: EditorUI               — inspector, hierarchy, toolbar panels
 │
 ├── Visual layers:
 │   ├── overlay: Rectangle                — depth 99999, captures clicks
-│   ├── gfx: Graphics                     — depth 100000, gizmos + selection box
+│   ├── gfx: Graphics                     — depth 100000, gizmos + selection box + snap guides
 │   ├── statusText: Text                  — depth 100001, "EDITOR MODE — Press F2 to exit"
 │   └── coordText: Text                   — depth 100001, mouse + selection coordinates
 │
-├── HTML layer:
-│   └── htmlContainer: div#phaser-editor-ui — fixed, pointer-events:none, z-index:1000
-│       └── .phaser-editor-inspector        — Tweakpane pane (right sidebar, pointer-events:auto)
+├── HTML layer (via EditorFrame):
+│   └── #phaser-editor-frame              — CSS grid container (z-index:999)
+│       ├── toolbarSlot                   — top row, spans all columns
+│       ├── hierarchySlot                 — left column
+│       ├── canvasCell                    — center, contains game canvas
+│       ├── inspectorSlot                 — right column
+│       └── statusSlot                    — bottom row, spans all columns
 │
 ├── init(data)     — receives designWidth, designHeight, hostSceneKey, pausedScenes
 ├── create()       — instantiate systems, create visuals, wire input, register shutdown listener
-├── update()       — clear gfx, redraw design bounds + selection + gizmos, refresh UI, update coord bar
-├── onShutdown()   — destroy UI → destroy gizmo/state/selection → remove HTML → remove listeners
+├── update()       — clear gfx, redraw design bounds + selection + gizmos + snap guides, refresh UI
+├── onShutdown()   — destroy UI → destroy frame → destroy gizmo/state/selection → remove listeners
 │
 ├── Input flow:
 │   ├── pointerdown → gizmoMgr.handlePointerDown() first (returns true if handle hit)
@@ -162,10 +177,48 @@ EditorScene (Phaser.Scene, key: '__PhaserEditorScene__')
 │
 ├── drawDesignBounds()      — cyan rectangle + corner markers at design area edges
 ├── updateCoordBar()        — "Mouse: design(x,y) screen(x,y) | name: design(x,y) screen(x,y)"
-├── getHostScene()          — returns game.scene.getScene(hostSceneKey)
-├── createHtmlContainer()   — creates div#phaser-editor-ui
-├── destroyHtmlContainer()  — removes the div
-└── onResize()              — repositions overlay + coord bar
+└── getHostScene()          — returns game.scene.getScene(hostSceneKey)
+```
+
+### EditorFrame Architecture
+
+```
+EditorFrame (manages CSS grid layout around canvas)
+├── Constructor(game):
+│   ├── Saves original canvas parent, position, ScaleManager config
+│   ├── Creates #phaser-editor-frame div (fixed, full viewport, z-index:999)
+│   ├── Creates CSS grid: 3 columns (220px | 1fr | 260px), 3 rows (40px | 1fr | 24px)
+│   ├── Moves canvas into center cell (canvasCell)
+│   ├── Patches ScaleManager: parent = canvasCell, autoCenter = NO_CENTER
+│   └── Sets up ResizeObserver to track canvasCell size changes
+│
+├── Grid layout:
+│   ┌─────────────────────────────────────────┐
+│   │  toolbarSlot (grid-column: 1/-1)        │  40px
+│   ├────────────┬───────────────┬────────────┤
+│   │ hierarchy  │    canvas     │  inspector │  1fr
+│   │ (220px)    │    (1fr)      │  (260px)   │
+│   ├────────────┴───────────────┴────────────┤
+│   │  statusSlot (grid-column: 1/-1)         │  24px
+│   └─────────────────────────────────────────┘
+│
+├── Slots (HTMLDivElements):
+│   ├── toolbarSlot    — ToolbarPanel attaches here
+│   ├── hierarchySlot  — HierarchyPanel attaches here
+│   ├── inspectorSlot  — InspectorPanel attaches here
+│   └── statusSlot     — status text attaches here
+│
+├── ResizeObserver:
+│   └── On canvasCell resize → scale.setParentSize(width, height)
+│
+├── setStatusText(text)  — updates status bar content
+│
+└── destroy():
+    ├── Disconnects ResizeObserver
+    ├── Moves canvas back to original parent
+    ├── Restores original ScaleManager config
+    ├── Removes #phaser-editor-frame
+    └── Calls scale.refresh()
 ```
 
 ### Gizmo System
@@ -173,10 +226,12 @@ EditorScene (Phaser.Scene, key: '__PhaserEditorScene__')
 ```
 GizmoManager
 ├── Owns MoveGizmo instance
+├── Receives SnappingEngine + getSelectableObjects callback
+├── snapGuides: SnapGuide[]      — current snap guides (set by MoveGizmo during drag)
 ├── draw(gfx)                    — draws active gizmo when tool is Move or Select
 ├── handlePointerDown(x, y)      — hit-tests gizmo handles, starts drag if hit, returns true
 ├── handlePointerMove(x, y)      — delegates to MoveGizmo.updateDrag()
-└── handlePointerUp()            — ends drag
+└── handlePointerUp()            — ends drag, clears snap guides
 
 MoveGizmo
 ├── Rendering (via Graphics API):
@@ -189,26 +244,35 @@ MoveGizmo
 │   ├── X-axis: rectangle along arrow (12px wide band)
 │   └── Y-axis: rectangle along arrow (12px wide band)
 │
+├── Snapping integration:
+│   ├── setSnapping(engine, config, getSelectableObjects)
+│   └── updateDrag() applies snapping via SnappingEngine.applySnapping()
+│
 └── Drag logic:
     ├── startDrag() — records screen start pos + object's design-space start pos
-    ├── updateDrag() — screen delta / scaleFactor → design delta, applies axis constraint
-    │                  calls CoordinateSystem.setDesignPosition()
-    └── endDrag() — clears drag state
+    ├── updateDrag() — calculates new design position, applies snapping, sets position
+    │                  stores snap guides in _snapGuides for rendering
+    └── endDrag() — clears drag state and snap guides
 ```
 
 ### UI System
 
 ```
 EditorUI
+├── Constructor(state, coords, slots, hostScene, game, pausedSceneKeys):
+│   ├── inspector = new InspectorPanel(slots.inspector, coords)
+│   ├── hierarchy = new HierarchyPanel(state, game, pausedSceneKeys, slots.hierarchy)
+│   └── toolbar = new ToolbarPanel(state, slots.toolbar)
+│
 ├── Listens to EditorState.EVENT_SELECTION_CHANGED
 ├── On select → InspectorPanel.bind(obj, hostScene)
 ├── On deselect → InspectorPanel.dispose()
-├── refresh() — called each frame, syncs panel from game object (for gizmo changes)
-└── destroy() — unsubscribes events, disposes inspector
+├── refresh() — inspector.refresh() + hierarchy.refresh()
+└── destroy() — unsubscribes events, disposes all panels
 
 InspectorPanel (Tweakpane 4.x)
 ├── bind(obj, hostScene):
-│   ├── Creates wrapper div (.phaser-editor-inspector, right sidebar, 260px wide)
+│   ├── Creates wrapper div (.phaser-editor-inspector, 260px wide)
 │   ├── Creates Pane with title = getObjectName(obj)
 │   ├── Transform folder: x, y (step 1), rotation (-360..360), scaleX, scaleY (0.01..10)
 │   ├── Origin folder (if obj has originX): originX, originY (0..1, step 0.05)
@@ -222,6 +286,47 @@ InspectorPanel (Tweakpane 4.x)
 │
 ├── dispose() — pane.dispose(), remove wrapper div, clear references
 └── refresh() — syncFromObject() + pane.refresh() (skipped if applying)
+
+HierarchyPanel (Plain HTML tree)
+├── Constructor(state, game, pausedSceneKeys, container):
+│   ├── Injects CSS styles (one-time)
+│   ├── Creates wrapper div (.phaser-editor-hierarchy, 220px wide)
+│   └── Builds initial tree
+│
+├── Tree structure:
+│   ├── Traverses scene.children.list for all paused scenes
+│   ├── Recurses into Containers to show children as nested items
+│   └── rowMap: Map<HTMLElement, GameObject> tracks DOM → object mapping
+│
+├── Features:
+│   ├── Expand/collapse: WeakSet<Container> tracks expanded state, click ▶/▼ to toggle
+│   ├── Visibility toggle: eye icon (👁/–) per object, click to toggle visible
+│   ├── Selection sync: click row → editorState.selected = obj, highlights row
+│   ├── Depth display: numeric depth value per row (right-aligned, dimmed)
+│   └── Smart naming: uses SelectionManager.getObjectName()
+│
+├── buildTree() — rebuilds entire tree (called on expand/collapse/visibility changes)
+├── buildNode(obj) — creates <li> row with toggle, eye, name, depth, nested children
+├── refresh() — rebuilds tree to sync with external changes
+└── destroy() — removes DOM, clears references
+
+ToolbarPanel (Plain HTML)
+├── Constructor(state, container):
+│   ├── Injects CSS styles (one-time)
+│   └── Creates toolbar div with flexbox layout
+│
+├── Tool buttons:
+│   ├── Select | Move | Rotate | Scale
+│   ├── Click → state.activeTool = tool
+│   └── Active button highlighted (blue background)
+│
+├── Snapping controls:
+│   ├── Grid checkbox → state.snapping.gridEnabled
+│   ├── Grid size input (1-200) → state.snapping.gridSize
+│   └── Object snap checkbox → state.snapping.objectSnapEnabled
+│
+├── Listens to EVENT_TOOL_CHANGED to update button highlights
+└── destroy() — removes DOM, clears references
 ```
 
 ### Core Systems
@@ -250,6 +355,40 @@ InspectorPanel (Tweakpane 4.x)
 - `getContainerBounds(container)` — union of all children's `getBounds()` results
 - `drawSelection(gfx)` — blue rect (2px) + 4 corner squares (6px) + center crosshair
 - `static getObjectName(obj)` — smart naming: uses `.name`, falls back to `Text: "..."`, `Image: key`, `Container (N children)`, or `.type`
+
+**SnappingEngine** (`src/core/SnappingEngine.ts`):
+- Stateless utility class — all methods are pure functions
+- All snapping operates in **design-space** coordinates
+- `gridSnap(point, gridSize)` → snapped point (rounds to nearest grid increment)
+- `objectSnap(point, allObjects, threshold, coords, hostScene, excludeObj?)` → `{ point, guides: SnapGuide[] }`
+  - Snaps to nearby object centers (not edges)
+  - Tests X and Y alignment separately
+  - Skips invisible objects
+- `applySnapping(point, config, allObjects, coords, hostScene, excludeObj?)` → `{ point, guides: SnapGuide[] }`
+  - Orchestrator: applies grid first, then object snapping
+  - Respects `config.gridEnabled` and `config.objectSnapEnabled`
+- `drawGuides(gfx, guides, coords, hostScene)` — renders magenta dashed lines
+- `drawDashedLine(gfx, x1, y1, x2, y2, dashLen, gapLen)` — helper for dashed rendering
+
+**SnappingConfig** (stored in `EditorState.snapping`):
+```typescript
+interface SnappingConfig {
+    gridEnabled: boolean;           // default: false
+    gridSize: number;               // default: 10 design-units
+    objectSnapEnabled: boolean;     // default: false
+    objectSnapThreshold: number;    // default: 8 design-units
+}
+```
+
+**SnapGuide** (for rendering snap alignment lines):
+```typescript
+interface SnapGuide {
+    type: 'vertical' | 'horizontal';
+    designPos: number;      // x for vertical, y for horizontal
+    designStart: number;    // start of line (y for vertical, x for horizontal)
+    designEnd: number;      // end of line
+}
+```
 
 ### Coordinate System Math
 
@@ -342,6 +481,26 @@ Editor HTML:
 - **`_pluginKey` naming:** Phaser's `ScenePlugin` already has a public `pluginKey` property, so our private field uses `_pluginKey` to avoid conflict
 - **Tweakpane types:** `Pane` inherits `addFolder`, `addBinding`, `refresh` from `FolderApi` via `RootApi`. Requires `@tweakpane/core` installed for TypeScript to resolve the inheritance chain.
 
+### EditorFrame Layout
+- **CSS grid with slots** — panels live in dedicated grid cells, not floating overlays
+- **Canvas in center cell** — Phaser canvas moved into grid, resizes with cell
+- **ResizeObserver** — tracks canvasCell size, calls `scale.setParentSize()` to notify Phaser
+- **ScaleManager patching** — saves original state, patches parent/autoCenter, fully restores on destroy
+- **Slot-based architecture** — toolbarSlot, hierarchySlot, inspectorSlot, statusSlot for clean separation
+
+### Snapping System
+- **Design-space math** — all snapping calculations in design-space, only convert to screen-space for rendering
+- **Stateless engine** — SnappingEngine methods are pure functions, no internal state
+- **Config in EditorState** — SnappingConfig stored centrally, reactive to toolbar changes
+- **Guides as data** — MoveGizmo produces SnapGuide[], EditorScene renders them (separation of concerns)
+- **Exclude dragged object** — object snapping skips the currently dragged object from snap targets
+
+### Hierarchy Panel
+- **Plain HTML tree** — `<ul>/<li>` with CSS indentation, not Tweakpane (which isn't suited for trees)
+- **WeakSet for expand state** — prevents memory leaks, survives tree rebuilds
+- **Row-to-object mapping** — `Map<HTMLElement, GameObject>` for efficient click handling
+- **Visibility toggle** — eye icon directly modifies `obj.visible`, rebuilds tree to update display
+
 ### Design Philosophy
 - **HTML panels + Phaser gizmos** — panels in DOM (don't fight depth system), gizmos via Phaser Graphics (pixel-precise alignment)
 - **Design-space export** — exported coordinates work at any screen size
@@ -420,51 +579,50 @@ Added Tweakpane 4.x as a dependency. Created InspectorPanel (right sidebar with 
 - Tweakpane bundled into dist (not externalized) since it's a dev tool — increases bundle from ~21kB to ~216kB but simplifies consumer setup
 - `applying` flag in InspectorPanel prevents feedback loop during bidirectional sync
 
-## Upcoming Phases
+### Phase 5: Hierarchy Panel + EditorFrame ✅
 
-### Phase 5: Hierarchy Panel
-
-**Files to create:**
-- `src/ui/HierarchyPanel.ts` — Left sidebar, scene object tree
+Created HierarchyPanel (left sidebar tree view) and EditorFrame (CSS grid layout that wraps the canvas). The hierarchy shows all scene objects with expand/collapse for Containers, visibility toggle, selection sync, and depth display. EditorFrame provides a proper layout where panels live in CSS grid slots around the canvas, not floating on top.
 
 **Implementation:**
-- Traverse `scene.children.list` for each paused scene
-- Recurse into Containers to show children as nested tree items
-- Smart naming using `SelectionManager.getObjectName()`
-- Click item → selects on canvas (syncs with SelectionManager)
-- Selected item highlighted in tree
-- Visibility toggle eye icon per object
-- Shows depth value
+- HierarchyPanel traverses `scene.children.list` for all paused scenes, recurses into Containers
+- WeakSet tracks expanded Containers (survives tree rebuilds)
+- Click row → selects object on canvas (synced via EditorState events)
+- Eye icon toggles `visible` property
+- EditorFrame creates `#phaser-editor-frame` div with CSS grid layout
+- Canvas moved into center cell, ResizeObserver tracks size changes
+- ScaleManager patched to use canvasCell as parent, fully restored on destroy
 
-**Tree rendering:**
-- Plain HTML `<ul>/<li>` with CSS indentation (not Tweakpane — it's not suited for trees)
-- Collapsible Containers (click arrow to expand/collapse children)
-- Scrollable panel with max-height
-- Lives in HTML overlay div, left side, `pointer-events: auto`
+**Lessons learned:**
+- ResizeObserver is essential for tracking CSS grid cell size changes → notify Phaser via `scale.setParentSize()`
+- ScaleManager state must be fully saved and restored (parent, autoCenter, width, height)
+- Canvas must be moved back to original parent on editor exit, not just hidden
+- Plain HTML tree (`<ul>/<li>`) is better than Tweakpane for hierarchical data
+- WeakSet for expand state prevents memory leaks and survives tree rebuilds
+- Slot-based UI architecture (toolbar/hierarchy/inspector/status slots) cleanly separates layout from content
 
-**Verify:** Panel shows tree of all objects. Click item → selects on canvas. Click Container → expand to see children.
+### Phase 6: Snapping Engine + Toolbar Panel ✅
 
-### Phase 6: Snapping + Toolbar
+Created SnappingEngine (grid and object snapping in design-space) and ToolbarPanel (top bar with tool buttons and snap controls). Snapping is applied during MoveGizmo drag, with magenta guide lines showing alignment.
 
-**Files to create:**
-- `src/core/SnappingEngine.ts` — Grid/object/edge snapping + guide line data
-- `src/ui/ToolbarPanel.ts` — Top bar with tool buttons and snap controls
+**Implementation:**
+- SnappingEngine is stateless — all methods are pure functions operating on design-space coordinates
+- Grid snap rounds to nearest grid increment
+- Object snap finds nearby object centers within threshold, generates guide lines
+- `applySnapping()` orchestrates grid then object snapping based on config
+- Guide lines rendered via `drawDashedLine()` helper (magenta dashed)
+- ToolbarPanel uses plain HTML with flexbox, not Tweakpane
+- Tool buttons (Select/Move/Rotate/Scale) update `editorState.activeTool`
+- Snap controls (grid checkbox, grid size input, object snap checkbox) update `editorState.snapping`
 
-**SnappingEngine:**
-- `gridSnap(point, gridSize)` → snapped point
-- `objectSnap(point, allObjects, threshold)` → `{ point, guides: Line[] }` (center/edge alignment)
-- `edgeSnap(point, allObjects, threshold)` → `{ point, guides: Line[] }`
-- `drawGuides(graphics, guides)` — magenta dashed lines
-- All snapping operates in **design-space** coordinates
+**Lessons learned:**
+- All snapping math in design-space simplifies calculations — only convert to screen-space for rendering
+- Dashed lines require manual implementation via Graphics API (no built-in support)
+- Toolbar as plain HTML is faster and lighter than Tweakpane for simple controls
+- SnappingConfig stored in EditorState makes it reactive to toolbar changes
+- MoveGizmo stores snap guides for EditorScene to render (separation of concerns)
+- Object snapping should exclude the dragged object from snap targets
 
-**ToolbarPanel (top bar, HTML):**
-- Tool buttons: Select | Move | Rotate | Scale (highlight active)
-- Grid snap toggle + grid size input (10, 20, 50 px)
-- Object snap toggle
-- Export button | Import button
-- Grid overlay toggle
-
-**Verify:** Enable grid snap (10px) → dragging jumps to increments. Drag near another object → magenta guide line. Toggle snap on/off from toolbar.
+## Upcoming Phases
 
 ### Phase 7: Rotate + Scale Gizmos
 
@@ -484,6 +642,46 @@ Added Tweakpane 4.x as a dependency. Created InspectorPanel (right sidebar with 
 - Drag corner → proportional, drag horizontal edge → scaleX only, drag vertical edge → scaleY only
 
 **Verify:** Switch to rotate tool → circle appears. Drag → rotates. With snap → 15-degree increments. Switch to scale → corner handles. Drag corner → proportional scale.
+
+### Phase 7b: Hit Area Visualization
+
+Visualize and inspect Phaser's built-in `setInteractive()` hit areas directly in the editor. No custom data model — reads from `gameObject.input.hitArea` which is already a `Phaser.Geom.Rectangle`, `Circle`, or `Polygon`.
+
+**Approach:** Read-only visualization first. The hit area shape is defined in game code, the editor just renders and exports it.
+
+**Hit area detection:**
+```typescript
+// Check if object has a hit area
+const input = obj.input; // Phaser.Types.Input.InteractiveObject | null
+if (!input) → "No hit area"
+
+// Determine shape type
+const hitArea = input.hitArea;
+if (hitArea instanceof Phaser.Geom.Rectangle) → render rect
+if (hitArea instanceof Phaser.Geom.Circle) → render circle
+if (hitArea instanceof Phaser.Geom.Polygon) → render polygon (hitArea.points)
+```
+
+**Rendering (in EditorScene, on the Graphics layer):**
+- Draw hit area shape as a semi-transparent overlay (e.g., yellow with 0.25 alpha fill + solid yellow stroke)
+- Shape coordinates are **local to the object** — must transform through object's world matrix to screen-space
+- For Containers: hit area coords are relative to the container's local origin
+- Only render when an object with a hit area is selected
+
+**Inspector panel addition:**
+- Add "Hit Area" folder to InspectorPanel (read-only)
+- Shows: shape type (Rectangle/Circle/Polygon), dimensions, vertex count for polygons
+
+**Files to modify:**
+- `src/EditorScene.ts` — add `drawHitArea(gfx, obj)` method, called in `update()` when selected object has `input`
+- `src/ui/InspectorPanel.ts` — add Hit Area folder in `bind()`
+
+**Coordinate transform for rendering:**
+- Rectangle: transform 4 corners through object's world matrix → draw polygon on screen
+- Circle: transform center through world matrix, scale radius by object's scale → draw circle on screen
+- Polygon: transform each vertex through world matrix → draw polygon on screen
+
+**Verify:** Select an object with `setInteractive()` → see yellow hit area overlay. Select object without → no overlay. Select coin (circle) → circle overlay. Select player (polygon) → polygon outline. Select platform (rectangle) → rect overlay. Check inspector shows "Hit Area: Polygon (9 vertices)" etc.
 
 ### Phase 8: Export/Import
 
@@ -514,10 +712,28 @@ Added Tweakpane 4.x as a dependency. Created InspectorPanel (right sidebar with 
             },
             "display": { "depth": 1000, "alpha": 1, "visible": true },
             "parent": "GameplayHUD",
-            "texture": "gameplay_panel_time"
+            "texture": "gameplay_panel_time",
+            "hitArea": {
+                "type": "polygon",
+                "vertices": [{ "x": 0, "y": -80 }, { "x": 24, "y": -50 }, { "x": 30, "y": 0 }]
+            }
         }
     ]
 }
+```
+
+**Hit area export shapes:**
+```json
+// Rectangle
+{ "type": "rectangle", "x": 0, "y": 0, "width": 64, "height": 16 }
+
+// Circle
+{ "type": "circle", "x": 16, "y": 16, "radius": 14 }
+
+// Polygon
+{ "type": "polygon", "vertices": [{ "x": 10, "y": 40 }, { "x": 5, "y": 30 }, ...] }
+
+// No hit area → field omitted from export
 ```
 
 **Export actions:**
