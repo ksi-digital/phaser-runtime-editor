@@ -22,10 +22,12 @@ export interface SnappingConfig {
 export class EditorState extends Phaser.Events.EventEmitter {
     static readonly EVENT_SELECTION_CHANGED = 'selection-changed';
     static readonly EVENT_TOOL_CHANGED = 'tool-changed';
+    static readonly EVENT_HIT_AREA_EDIT_CHANGED = 'hitarea-edit-changed';
 
     private _selected: Phaser.GameObjects.GameObject | null = null;
-    private _activeTool: EditorTool = EditorTool.Move;
+    private _activeTool: EditorTool = EditorTool.Select;
     private _snapping: SnappingConfig;
+    private _editingHitArea: boolean = false;
 
     constructor() {
         super();
@@ -45,6 +47,7 @@ export class EditorState extends Phaser.Events.EventEmitter {
         if (this._selected === obj) return;
         const prev = this._selected;
         this._selected = obj;
+        this._editingHitArea = false;
         this.emit(EditorState.EVENT_SELECTION_CHANGED, obj, prev);
     }
 
@@ -62,6 +65,16 @@ export class EditorState extends Phaser.Events.EventEmitter {
         return this._snapping;
     }
 
+    get editingHitArea(): boolean {
+        return this._editingHitArea;
+    }
+
+    set editingHitArea(value: boolean) {
+        if (this._editingHitArea === value) return;
+        this._editingHitArea = value;
+        this.emit(EditorState.EVENT_HIT_AREA_EDIT_CHANGED, value);
+    }
+
     deselect(): void {
         this.selected = null;
     }
@@ -69,5 +82,6 @@ export class EditorState extends Phaser.Events.EventEmitter {
     destroy(): void {
         this.removeAllListeners();
         this._selected = null;
+        this._editingHitArea = false;
     }
 }

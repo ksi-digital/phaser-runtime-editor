@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import { SelectionManager } from '../core/SelectionManager';
 import { SnappingEngine, SnapGuide } from '../core/SnappingEngine';
 import type { SnappingConfig } from '../core/EditorState';
 
@@ -88,12 +89,20 @@ export class MoveGizmo {
     }
 
     /**
-     * Draw the move gizmo handles at the given object's screen position.
+     * Draw the move gizmo handles at the visual center of the selected object.
+     * Uses the bounding box center so it aligns with the visual for all objects,
+     * including Polygon shapes where getWorldPosition() doesn't match the visual center.
      */
-    draw(gfx: Phaser.GameObjects.Graphics, obj: Phaser.GameObjects.GameObject): void {
-        const world = this.coords.getWorldPosition(obj);
-        this.cx = world.x;
-        this.cy = world.y;
+    draw(gfx: Phaser.GameObjects.Graphics, obj: Phaser.GameObjects.GameObject, selectionMgr: SelectionManager): void {
+        const bounds = selectionMgr.getScreenBounds(obj);
+        if (bounds) {
+            this.cx = bounds.x + bounds.width / 2;
+            this.cy = bounds.y + bounds.height / 2;
+        } else {
+            const world = this.coords.getWorldPosition(obj);
+            this.cx = world.x;
+            this.cy = world.y;
+        }
 
         // --- X axis arrow (red, pointing right) ---
         gfx.lineStyle(2, COLOR_X, 0.9);

@@ -76,6 +76,8 @@ export class EditorScene extends Phaser.Scene {
             this.coordSystem,
             this.game,
             this.hostSceneKey,
+            this.selectionMgr,
+            this,
             this.snappingEngine,
             () => this.selectionMgr.getSelectableObjects(),
         );
@@ -152,6 +154,14 @@ export class EditorScene extends Phaser.Scene {
         this.gfx.clear();
         this.drawDesignBounds();
         this.selectionMgr.drawSelection(this.gfx);
+
+        // Draw hit area overlay on selected object (not in hit area edit mode,
+        // since HitAreaGizmo draws its own enhanced version with handles)
+        const sel = this.editorState.selected;
+        if (sel && (sel as any).input?.hitArea && !this.editorState.editingHitArea) {
+            this.drawHitArea(this.gfx, sel);
+        }
+
         this.gizmoMgr.draw(this.gfx);
 
         // Render snap guides during drag
@@ -228,6 +238,91 @@ export class EditorScene extends Phaser.Scene {
             this.gfx.moveTo(c.x, c.y - markerSize);
             this.gfx.lineTo(c.x, c.y + markerSize);
             this.gfx.strokePath();
+        }
+    }
+
+    /**
+     * Draw the hit area shape for the given object as a yellow overlay.
+     *
+     * Hit area coordinates are in frame-space (0,0 = top-left of texture bounds).
+     * The world transform matrix origin is at the object's displayOrigin, so we
+     * subtract displayOriginX/Y to convert frame-space → local-space before
+     * applying the matrix.
+     *
+     * Exception: Containers define hit area vertices in local/origin-relative
+     * space (0,0 = container position), and their displayOriginX is hardcoded
+     * to width*0.5 regardless of actual hit area layout. So for Containers we
+     * skip the displayOrigin subtraction.
+     */
+    private drawHitArea(gfx: Phaser.GameObjects.Graphics, obj: Phaser.GameObjects.GameObject): void {
+        const input = (obj as any).input;
+        if (!input?.hitArea) return;
+
+        const hitArea = input.hitArea;
+        const matrix: Phaser.GameObjects.Components.TransformMatrix =
+            (obj as any).getWorldTransformMatrix();
+
+        const HIT_FILL_COLOR = 0xffff00;
+        const HIT_FILL_ALPHA = 0.15;
+        const HIT_STROKE_COLOR = 0xffff00;
+        const HIT_STROKE_ALPHA = 0.8;
+        const HIT_LINE_WIDTH = 2;
+
+        // Containers have hardcoded displayOriginX = width*0.5 (read-only),
+        // and their hit area vertices are in local space (0,0 = container origin).
+        // All other objects use frame-space hit areas that need displayOrigin subtraction.
+        const isContainer = obj instanceof Phaser.GameObjects.Container;
+        const dx = isContainer ? 0 : ('displayOriginX' in obj ? (obj as any).displayOriginX : 0);
+        const dy = isContainer ? 0 : ('displayOriginY' in obj ? (obj as any).displayOriginY : 0);
+
+        /** Transform a hit area point to screen space, applying displayOrigin offset. */
+        const toScreen = (lx: number, ly: number) => {
+            const adjX = lx - dx;
+            const adjY = ly - dy;
+            return {
+                x: matrix.a * adjX + matrix.c * adjY + matrix.tx,
+                y: matrix.b * adjX + matrix.d * adjY + matrix.ty,
+            };
+        };
+
+        if (hitArea instanceof Phaser.Geom.Rectangle) {
+            const r = hitArea as Phaser.Geom.Rectangle;
+            const corners = [
+                toScreen(r.x, r.y),
+                toScreen(r.x + r.width, r.y),
+                toScreen(r.x + r.width, r.y + r.height),
+                toScreen(r.x, r.y + r.height),
+            ];
+
+            gfx.fillStyle(HIT_FILL_COLOR, HIT_FILL_ALPHA);
+            gfx.fillPoints(corners as any, true);
+            gfx.lineStyle(HIT_LINE_WIDTH, HIT_STROKE_COLOR, HIT_STROKE_ALPHA);
+            gfx.strokePoints(corners as any, true);
+
+        } else if (hitArea instanceof Phaser.Geom.Circle) {
+            const c = hitArea as Phaser.Geom.Circle;
+            const center = toScreen(c.x, c.y);
+            const scaleX = Math.sqrt(matrix.a * matrix.a + matrix.b * matrix.b);
+            const scaleY = Math.sqrt(matrix.c * matrix.c + matrix.d * matrix.d);
+            const screenRadius = c.radius * (scaleX + scaleY) / 2;
+
+            gfx.fillStyle(HIT_FILL_COLOR, HIT_FILL_ALPHA);
+            gfx.fillCircle(center.x, center.y, screenRadius);
+            gfx.lineStyle(HIT_LINE_WIDTH, HIT_STROKE_COLOR, HIT_STROKE_ALPHA);
+            gfx.strokeCircle(center.x, center.y, screenRadius);
+
+        } else if (hitArea instanceof Phaser.Geom.Polygon) {
+            const poly = hitArea as Phaser.Geom.Polygon;
+            const screenPoints = poly.points.map((p: { x: number; y: number }) =>
+                toScreen(p.x, p.y),
+            );
+
+            if (screenPoints.length >= 3) {
+                gfx.fillStyle(HIT_FILL_COLOR, HIT_FILL_ALPHA);
+                gfx.fillPoints(screenPoints as any, true);
+                gfx.lineStyle(HIT_LINE_WIDTH, HIT_STROKE_COLOR, HIT_STROKE_ALPHA);
+                gfx.strokePoints(screenPoints as any, true);
+            }
         }
     }
 

@@ -306,6 +306,31 @@ export class HierarchyPanel {
         }
 
         parentUl.appendChild(li);
+
+        // Virtual hit area sub-entry (if object has a hit area)
+        const objInput = (obj as any).input;
+        if (objInput?.hitArea) {
+            const shapeName = objInput.hitArea instanceof Phaser.Geom.Rectangle ? 'Rect'
+                : objInput.hitArea instanceof Phaser.Geom.Circle ? 'Circle'
+                : objInput.hitArea instanceof Phaser.Geom.Polygon ? 'Polygon' : 'Hit Area';
+
+            const haLi = document.createElement('li');
+            const haRow = document.createElement('div');
+            haRow.className = 'pe-row';
+            haRow.style.paddingLeft = '30px';
+            haRow.style.color = '#dd4';
+            haRow.style.fontStyle = 'italic';
+            haRow.innerHTML = `<span class="pe-toggle"></span><span class="pe-name">\u2B21 ${shapeName}</span>`;
+            haRow.addEventListener('click', () => {
+                if (this.state.selected !== obj) {
+                    this.state.selected = obj;
+                }
+                this.state.editingHitArea = true;
+            });
+            this.rowMap.set(haRow, obj);
+            haLi.appendChild(haRow);
+            parentUl.appendChild(haLi);
+        }
     }
 
     private updateHighlight(): void {

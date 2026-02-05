@@ -44,6 +44,12 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
         scaleX: number; scaleY: number;
         originX: number; originY: number;
         alpha: number; visible: boolean;
+        hitArea?: {
+            type: 'rect' | 'circle' | 'polygon';
+            rx?: number; ry?: number; rw?: number; rh?: number;
+            cx?: number; cy?: number; cr?: number;
+            points?: Array<{ x: number; y: number }>;
+        };
     }> = new Map();
 
     private _pluginKey: string;
@@ -219,12 +225,33 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
     private snapshotObject(obj: Phaser.GameObjects.GameObject): void {
         if (!('x' in obj)) return;
         const o = obj as any;
+
+        // Snapshot hit area geometry if present
+        let hitAreaSnap: {
+            type: 'rect' | 'circle' | 'polygon';
+            rx?: number; ry?: number; rw?: number; rh?: number;
+            cx?: number; cy?: number; cr?: number;
+            points?: Array<{ x: number; y: number }>;
+        } | undefined;
+        const input = o.input;
+        if (input?.hitArea) {
+            const ha = input.hitArea;
+            if (ha instanceof Phaser.Geom.Rectangle) {
+                hitAreaSnap = { type: 'rect', rx: ha.x, ry: ha.y, rw: ha.width, rh: ha.height };
+            } else if (ha instanceof Phaser.Geom.Circle) {
+                hitAreaSnap = { type: 'circle', cx: ha.x, cy: ha.y, cr: ha.radius };
+            } else if (ha instanceof Phaser.Geom.Polygon) {
+                hitAreaSnap = { type: 'polygon', points: ha.points.map((p: any) => ({ x: p.x, y: p.y })) };
+            }
+        }
+
         this.propertySnapshot.set(obj, {
             x: o.x, y: o.y,
             rotation: o.rotation ?? 0,
             scaleX: o.scaleX ?? 1, scaleY: o.scaleY ?? 1,
             originX: o.originX ?? 0.5, originY: o.originY ?? 0.5,
             alpha: o.alpha ?? 1, visible: o.visible ?? true,
+            hitArea: hitAreaSnap,
         });
 
         // Recurse into Container children
@@ -249,6 +276,27 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
             }
             if ('alpha' in o) o.alpha = snap.alpha;
             if ('visible' in o) o.visible = snap.visible;
+
+            // Restore hit area geometry
+            if (snap.hitArea && o.input?.hitArea) {
+                const ha = o.input.hitArea;
+                if (snap.hitArea.type === 'rect' && ha instanceof Phaser.Geom.Rectangle) {
+                    ha.x = snap.hitArea.rx!;
+                    ha.y = snap.hitArea.ry!;
+                    ha.width = snap.hitArea.rw!;
+                    ha.height = snap.hitArea.rh!;
+                } else if (snap.hitArea.type === 'circle' && ha instanceof Phaser.Geom.Circle) {
+                    ha.x = snap.hitArea.cx!;
+                    ha.y = snap.hitArea.cy!;
+                    ha.radius = snap.hitArea.cr!;
+                } else if (snap.hitArea.type === 'polygon' && ha instanceof Phaser.Geom.Polygon) {
+                    const pts = snap.hitArea.points!;
+                    for (let i = 0; i < ha.points.length && i < pts.length; i++) {
+                        ha.points[i].x = pts[i].x;
+                        ha.points[i].y = pts[i].y;
+                    }
+                }
+            }
         }
         this.propertySnapshot.clear();
     }

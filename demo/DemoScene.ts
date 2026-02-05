@@ -206,25 +206,28 @@ export class DemoScene extends Phaser.Scene {
         levelText.setDepth(10);
         levelText.setName('hud_level');
 
-        // --- HUD: Settings button (depth 10) ---
-        const settingsPos = toScreen(670, 30);
-        const settingsBg = this.add.image(0, 0, 'btn_settings');
-        settingsBg.setDisplaySize(56 * sf, 56 * sf);
-        settingsBg.setName('settings_bg');
+        // --- HUD: Menu button (depth 10) ---
+        const menuBtnPos = toScreen(670, 30);
+        const menuBtnBg = this.add.image(0, 0, 'btn_settings');
+        menuBtnBg.setDisplaySize(56 * sf, 56 * sf);
+        menuBtnBg.setName('menu_btn_bg');
 
-        const settingsIcon = this.add.text(0, 0, '\u2699', {
+        const menuBtnIcon = this.add.text(0, 0, '\u2630', {
             fontFamily: 'Arial, sans-serif',
-            fontSize: `${Math.round(32 * sf)}px`,
+            fontSize: `${Math.round(28 * sf)}px`,
             color: '#ffffff',
         });
-        settingsIcon.setOrigin(0.5, 0.5);
-        settingsIcon.setName('settings_icon');
+        menuBtnIcon.setOrigin(0.5, 0.5);
+        menuBtnIcon.setName('menu_btn_icon');
 
-        const settingsBtn = this.add.container(settingsPos.x, settingsPos.y, [settingsBg, settingsIcon]);
-        settingsBtn.setDepth(10);
-        settingsBtn.setName('settings_button');
-        settingsBtn.setSize(56 * sf, 56 * sf);
-        settingsBtn.setInteractive(new Phaser.Geom.Circle(0, 0, 28 * sf), Phaser.Geom.Circle.Contains);
+        const menuBtn = this.add.container(menuBtnPos.x, menuBtnPos.y, [menuBtnBg, menuBtnIcon]);
+        menuBtn.setDepth(10);
+        menuBtn.setName('menu_button');
+        menuBtn.setSize(56 * sf, 56 * sf);
+        menuBtnBg.setInteractive();
+        menuBtnBg.on('pointerdown', () => {
+            this.scene.start('MenuScene');
+        });
 
         // --- Health bar Container (depth 10) ---
         const hpPos = toScreen(20, 60);
@@ -295,6 +298,26 @@ export class DemoScene extends Phaser.Scene {
         dlgBtnBg.on('pointerdown', () => {
             dialog.setVisible(false);
         });
+
+        // --- Gem polygon (depth 4) ---
+        const gemPos = toScreen(360, 450);
+        const gem = this.add.polygon(gemPos.x, gemPos.y, [
+            0, -28,    // top
+            20, -8,    // upper right
+            20, 12,    // lower right
+            0, 28,     // bottom
+            -20, 12,   // lower left
+            -20, -8,   // upper left
+        ], 0xff44cc, 1);
+        gem.setDisplaySize(40 * sf, 56 * sf);
+        gem.setDepth(4);
+        gem.setName('gem_polygon');
+        gem.setInteractive(
+            new Phaser.Geom.Polygon([
+                0, -28, 20, -8, 20, 12, 0, 28, -20, 12, -20, -8,
+            ]),
+            Phaser.Geom.Polygon.Contains,
+        );
 
         // --- Clouds with tween (depth 2) ---
         const cloudPos = toScreen(150, 200);

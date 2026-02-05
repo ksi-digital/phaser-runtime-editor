@@ -92,11 +92,20 @@ export class SelectionManager {
     /**
      * Get the screen-space bounding rectangle of a game object.
      * For Containers, computes the union bounds of all children.
+     * For Polygon Shapes, computes bounds from geometry vertices (Phaser's
+     * getBounds() is incorrect when polygon vertices have negative coordinates).
      */
     getScreenBounds(obj: Phaser.GameObjects.GameObject): Phaser.Geom.Rectangle | null {
         // Container: compute union of children bounds
         if (obj instanceof Phaser.GameObjects.Container) {
             return this.getContainerBounds(obj);
+        }
+
+        // Polygon Shape: getBounds() is known to return wrong results for
+        // negative vertices. Compute AABB by transforming geometry through
+        // the world matrix with displayOrigin offset (same math as hit area overlay).
+        if (obj instanceof Phaser.GameObjects.Polygon) {
+            return this.getPolygonShapeBounds(obj);
         }
 
         // Regular object: use getBounds if available
@@ -109,6 +118,38 @@ export class SelectionManager {
         }
 
         return null;
+    }
+
+    /**
+     * Compute screen-space AABB for a Polygon Shape by transforming its
+     * geometry vertices through the world matrix with displayOrigin offset.
+     * Phaser's built-in getBounds() returns wrong results when polygon
+     * vertices have negative coordinates.
+     */
+    private getPolygonShapeBounds(poly: Phaser.GameObjects.Polygon): Phaser.Geom.Rectangle | null {
+        const geom = (poly as any).geom as Phaser.Geom.Polygon;
+        if (!geom?.points || geom.points.length < 2) return null;
+
+        const matrix: Phaser.GameObjects.Components.TransformMatrix =
+            (poly as any).getWorldTransformMatrix();
+        const dx = (poly as any).displayOriginX ?? 0;
+        const dy = (poly as any).displayOriginY ?? 0;
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        for (const p of geom.points) {
+            const adjX = p.x - dx;
+            const adjY = p.y - dy;
+            const sx = matrix.a * adjX + matrix.c * adjY + matrix.tx;
+            const sy = matrix.b * adjX + matrix.d * adjY + matrix.ty;
+            minX = Math.min(minX, sx);
+            minY = Math.min(minY, sy);
+            maxX = Math.max(maxX, sx);
+            maxY = Math.max(maxY, sy);
+        }
+
+        if (!isFinite(minX)) return null;
+        return new Phaser.Geom.Rectangle(minX, minY, maxX - minX, maxY - minY);
     }
 
     /**

@@ -34,6 +34,13 @@ export class InspectorPanel {
         type: '',
         texture: '',
         parent: '',
+        // Hit area
+        hitAreaShape: '',
+        hitAreaX: 0,
+        hitAreaY: 0,
+        hitAreaW: 0,
+        hitAreaH: 0,
+        hitAreaRadius: 0,
     };
 
     /** The currently bound game object. */
@@ -97,10 +104,10 @@ export class InspectorPanel {
             .on('change', () => this.applyTransform());
         transform.addBinding(this.params, 'rotation', { min: -180, max: 180, step: 1, label: 'rotation' })
             .on('change', () => this.applyRotation());
-        const scaleMax = Math.max(10, this.params.scaleX * 2, this.params.scaleY * 2);
-        transform.addBinding(this.params, 'scaleX', { min: 0.01, max: scaleMax, step: 0.01, label: 'scaleX' })
+        const scaleMax = Math.max(10, Math.abs(this.params.scaleX) * 2, Math.abs(this.params.scaleY) * 2);
+        transform.addBinding(this.params, 'scaleX', { min: -scaleMax, max: scaleMax, step: 0.01, label: 'scaleX' })
             .on('change', () => this.applyScale());
-        transform.addBinding(this.params, 'scaleY', { min: 0.01, max: scaleMax, step: 0.01, label: 'scaleY' })
+        transform.addBinding(this.params, 'scaleY', { min: -scaleMax, max: scaleMax, step: 0.01, label: 'scaleY' })
             .on('change', () => this.applyScale());
 
         // --- Origin folder ---
@@ -129,6 +136,32 @@ export class InspectorPanel {
         }
         if (this.params.parent) {
             info.addBinding(this.params, 'parent', { readonly: true, label: 'parent' });
+        }
+
+        // --- Hit Area folder ---
+        const hitArea = (obj as any).input?.hitArea;
+        if (hitArea) {
+            const hitAreaFolder = this.pane.addFolder({ title: 'Hit Area', expanded: true });
+            hitAreaFolder.addBinding(this.params, 'hitAreaShape', { readonly: true, label: 'shape' });
+
+            if (hitArea instanceof Phaser.Geom.Rectangle) {
+                hitAreaFolder.addBinding(this.params, 'hitAreaX', { step: 1, label: 'x' })
+                    .on('change', () => this.applyHitArea());
+                hitAreaFolder.addBinding(this.params, 'hitAreaY', { step: 1, label: 'y' })
+                    .on('change', () => this.applyHitArea());
+                hitAreaFolder.addBinding(this.params, 'hitAreaW', { min: 1, step: 1, label: 'width' })
+                    .on('change', () => this.applyHitArea());
+                hitAreaFolder.addBinding(this.params, 'hitAreaH', { min: 1, step: 1, label: 'height' })
+                    .on('change', () => this.applyHitArea());
+            } else if (hitArea instanceof Phaser.Geom.Circle) {
+                hitAreaFolder.addBinding(this.params, 'hitAreaX', { step: 1, label: 'x' })
+                    .on('change', () => this.applyHitArea());
+                hitAreaFolder.addBinding(this.params, 'hitAreaY', { step: 1, label: 'y' })
+                    .on('change', () => this.applyHitArea());
+                hitAreaFolder.addBinding(this.params, 'hitAreaRadius', { min: 1, step: 1, label: 'radius' })
+                    .on('change', () => this.applyHitArea());
+            }
+            // Polygon: shape label only (read-only), vertex editing too complex for simple fields
         }
     }
 
@@ -187,6 +220,30 @@ export class InspectorPanel {
         this.params.parent = ('parentContainer' in obj && (obj as any).parentContainer)
             ? SelectionManager.getObjectName((obj as any).parentContainer)
             : '';
+
+        // Hit area geometry
+        const input = (obj as any).input;
+        if (input?.hitArea) {
+            const ha = input.hitArea;
+            if (ha instanceof Phaser.Geom.Rectangle) {
+                this.params.hitAreaShape = 'Rectangle';
+                this.params.hitAreaX = ha.x;
+                this.params.hitAreaY = ha.y;
+                this.params.hitAreaW = ha.width;
+                this.params.hitAreaH = ha.height;
+            } else if (ha instanceof Phaser.Geom.Circle) {
+                this.params.hitAreaShape = 'Circle';
+                this.params.hitAreaX = ha.x;
+                this.params.hitAreaY = ha.y;
+                this.params.hitAreaRadius = ha.radius;
+            } else if (ha instanceof Phaser.Geom.Polygon) {
+                this.params.hitAreaShape = `Polygon (${ha.points.length} vertices)`;
+            } else {
+                this.params.hitAreaShape = 'Custom';
+            }
+        } else {
+            this.params.hitAreaShape = '';
+        }
     }
 
     // ---- Apply: params → object ----
@@ -229,6 +286,24 @@ export class InspectorPanel {
         this.applying = true;
         if ('alpha' in this.target) (this.target as any).alpha = this.params.alpha;
         if ('visible' in this.target) (this.target as any).visible = this.params.visible;
+        this.applying = false;
+    }
+
+    private applyHitArea(): void {
+        const input = (this.target as any)?.input;
+        if (!input?.hitArea) return;
+        this.applying = true;
+        const ha = input.hitArea;
+        if (ha instanceof Phaser.Geom.Rectangle) {
+            ha.x = this.params.hitAreaX;
+            ha.y = this.params.hitAreaY;
+            ha.width = this.params.hitAreaW;
+            ha.height = this.params.hitAreaH;
+        } else if (ha instanceof Phaser.Geom.Circle) {
+            ha.x = this.params.hitAreaX;
+            ha.y = this.params.hitAreaY;
+            ha.radius = this.params.hitAreaRadius;
+        }
         this.applying = false;
     }
 
