@@ -5,15 +5,20 @@ import { InspectorPanel } from './InspectorPanel';
 import { HierarchyPanel } from './HierarchyPanel';
 import { ToolbarPanel } from './ToolbarPanel';
 
+export interface EditorUISlots {
+    toolbar: HTMLElement;
+    hierarchy: HTMLElement;
+    inspector: HTMLElement;
+}
+
 /**
  * Manages the HTML-based editor UI panels.
- * Lives inside the HTML overlay container created by EditorScene.
+ * Each panel is mounted into its own slot provided by EditorFrame.
  * Listens to EditorState events and creates/destroys panels accordingly.
  */
 export class EditorUI {
     private state: EditorState;
     private coords: CoordinateSystem;
-    private container: HTMLElement;
     private hostScene: Phaser.Scene;
 
     private inspector: InspectorPanel;
@@ -23,19 +28,18 @@ export class EditorUI {
     constructor(
         state: EditorState,
         coords: CoordinateSystem,
-        container: HTMLElement,
+        slots: EditorUISlots,
         hostScene: Phaser.Scene,
         game: Phaser.Game,
         pausedSceneKeys: string[],
     ) {
         this.state = state;
         this.coords = coords;
-        this.container = container;
         this.hostScene = hostScene;
 
-        this.inspector = new InspectorPanel(container, coords);
-        this.hierarchy = new HierarchyPanel(state, game, pausedSceneKeys, container);
-        this.toolbar = new ToolbarPanel(state, container);
+        this.inspector = new InspectorPanel(slots.inspector, coords);
+        this.hierarchy = new HierarchyPanel(state, game, pausedSceneKeys, slots.hierarchy);
+        this.toolbar = new ToolbarPanel(state, slots.toolbar);
 
         // Wire up selection changes
         this.state.on(EditorState.EVENT_SELECTION_CHANGED, this.onSelectionChanged, this);

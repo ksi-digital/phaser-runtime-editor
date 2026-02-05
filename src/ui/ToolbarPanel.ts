@@ -35,23 +35,16 @@ export class ToolbarPanel {
         this.wrapper = document.createElement('div');
         this.wrapper.className = 'phaser-editor-toolbar';
         this.wrapper.style.cssText = `
-            position: absolute;
-            top: 8px;
-            left: 50%;
-            transform: translateX(-50%);
-            pointer-events: auto;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
             background: rgba(30, 30, 30, 0.95);
-            border: 1px solid #444;
-            border-radius: 4px;
             padding: 4px 10px;
             font-family: monospace;
             font-size: 12px;
             color: #ccc;
             user-select: none;
-            z-index: 10;
         `;
         this.container.appendChild(this.wrapper);
 

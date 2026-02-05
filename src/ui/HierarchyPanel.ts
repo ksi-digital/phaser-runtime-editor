@@ -47,7 +47,6 @@ export class HierarchyPanel {
 
         this.createWrapper();
         this.buildTree();
-        this.makeDraggable();
 
         // Listen for selection changes to highlight the correct row
         this.state.on(EditorState.EVENT_SELECTION_CHANGED, this.onSelectionChanged, this);
@@ -84,16 +83,9 @@ export class HierarchyPanel {
         this.wrapper = document.createElement('div');
         this.wrapper.className = 'phaser-editor-hierarchy';
         this.wrapper.style.cssText = `
-            position: absolute;
-            top: 40px;
-            left: 8px;
-            width: 240px;
-            max-height: calc(100vh - 80px);
+            width: 220px;
             overflow-y: auto;
-            pointer-events: auto;
             background: rgba(30, 30, 30, 0.95);
-            border: 1px solid #444;
-            border-radius: 4px;
             color: #ccc;
             font-family: monospace;
             font-size: 12px;
@@ -342,48 +334,4 @@ export class HierarchyPanel {
         this.updateHighlight();
     }
 
-    // ---- Draggable panel ----
-
-    private makeDraggable(): void {
-        if (!this.wrapper) return;
-        const titleBar = this.wrapper.querySelector<HTMLElement>('.pe-title');
-        if (!titleBar) return;
-
-        titleBar.style.cursor = 'grab';
-        const wrapper = this.wrapper;
-
-        let dragX = 0;
-        let dragY = 0;
-        let startLeft = 0;
-        let startTop = 0;
-
-        const onMouseMove = (e: MouseEvent) => {
-            wrapper.style.left = `${startLeft + e.clientX - dragX}px`;
-            wrapper.style.top = `${startTop + e.clientY - dragY}px`;
-        };
-
-        const onMouseUp = () => {
-            titleBar.style.cursor = 'grab';
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-        };
-
-        titleBar.addEventListener('mousedown', (e: MouseEvent) => {
-            e.preventDefault();
-            titleBar.style.cursor = 'grabbing';
-
-            const rect = wrapper.getBoundingClientRect();
-            wrapper.style.left = `${rect.left}px`;
-            wrapper.style.top = `${rect.top}px`;
-            wrapper.style.right = 'auto';
-
-            dragX = e.clientX;
-            dragY = e.clientY;
-            startLeft = rect.left;
-            startTop = rect.top;
-
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
-    }
 }

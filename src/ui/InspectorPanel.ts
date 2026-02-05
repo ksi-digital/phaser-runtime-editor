@@ -65,17 +65,12 @@ export class InspectorPanel {
         const wrapper = document.createElement('div');
         wrapper.className = 'phaser-editor-inspector';
         wrapper.style.cssText = `
-            position: absolute;
-            top: 40px;
-            right: 8px;
             width: 260px;
-            pointer-events: auto;
-            max-height: calc(100vh - 80px);
             overflow-y: auto;
         `;
         this.container.appendChild(wrapper);
 
-        // Custom title bar (drag handle) — avoids Tweakpane's built-in collapse toggle
+        // Title bar
         const titleBar = document.createElement('div');
         titleBar.textContent = SelectionManager.getObjectName(obj);
         titleBar.style.cssText = `
@@ -86,16 +81,11 @@ export class InspectorPanel {
             color: #c8ccd0;
             background: #1f1f1f;
             border-bottom: 1px solid #333;
-            border-radius: 4px 4px 0 0;
-            cursor: grab;
             user-select: none;
         `;
         wrapper.appendChild(titleBar);
 
         this.pane = new Pane({ container: wrapper });
-
-        // Make the panel draggable via the custom title bar
-        this.makeDraggable(wrapper, titleBar);
 
         // --- Transform folder ---
         const transform = this.pane.addFolder({ title: 'Transform', expanded: true });
@@ -242,44 +232,4 @@ export class InspectorPanel {
         this.applying = false;
     }
 
-    // ---- Draggable panel ----
-
-    private makeDraggable(wrapper: HTMLElement, titleBar: HTMLElement): void {
-        let dragX = 0;
-        let dragY = 0;
-        let startLeft = 0;
-        let startTop = 0;
-
-        const onMouseMove = (e: MouseEvent) => {
-            const dx = e.clientX - dragX;
-            const dy = e.clientY - dragY;
-            wrapper.style.left = `${startLeft + dx}px`;
-            wrapper.style.top = `${startTop + dy}px`;
-        };
-
-        const onMouseUp = () => {
-            titleBar.style.cursor = 'grab';
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-        };
-
-        titleBar.addEventListener('mousedown', (e: MouseEvent) => {
-            e.preventDefault();
-            titleBar.style.cursor = 'grabbing';
-
-            // Switch from right-anchored to left-anchored positioning
-            const rect = wrapper.getBoundingClientRect();
-            wrapper.style.right = 'auto';
-            wrapper.style.left = `${rect.left}px`;
-            wrapper.style.top = `${rect.top}px`;
-
-            dragX = e.clientX;
-            dragY = e.clientY;
-            startLeft = rect.left;
-            startTop = rect.top;
-
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
-    }
 }

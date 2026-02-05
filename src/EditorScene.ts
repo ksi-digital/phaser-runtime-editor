@@ -5,6 +5,7 @@ import { SelectionManager } from './core/SelectionManager';
 import { SnappingEngine } from './core/SnappingEngine';
 import { GizmoManager } from './gizmos/GizmoManager';
 import { EditorUI } from './ui/EditorUI';
+import { EditorFrame } from './ui/EditorFrame';
 
 const EDITOR_DEPTH = 100000;
 
@@ -13,6 +14,7 @@ interface EditorSceneData {
     designHeight: number;
     hostSceneKey: string;
     pausedScenes: string[];
+    hotkey: string;
 }
 
 /**
@@ -25,6 +27,7 @@ export class EditorScene extends Phaser.Scene {
     private designHeight = 1552;
     private hostSceneKey = '';
     private pausedScenes: string[] = [];
+    private hotkey = 'F2';
 
     /** Graphics object for drawing gizmos, bounding boxes, grid, etc. */
     private gfx!: Phaser.GameObjects.Graphics;
@@ -32,14 +35,8 @@ export class EditorScene extends Phaser.Scene {
     /** Semi-transparent overlay indicating editor mode */
     private overlay!: Phaser.GameObjects.Rectangle;
 
-    /** HTML container for Tweakpane panels */
-    private htmlContainer: HTMLDivElement | null = null;
-
-    /** Status bar showing editor mode indicator */
-    private statusText!: Phaser.GameObjects.Text;
-
-    /** Coordinate bar showing mouse + selection position */
-    private coordText!: Phaser.GameObjects.Text;
+    /** Editor frame layout (panels beside canvas) */
+    private editorFrame!: EditorFrame;
 
     /** Core systems */
     editorState!: EditorState;
@@ -58,6 +55,7 @@ export class EditorScene extends Phaser.Scene {
         this.designHeight = data.designHeight ?? 1552;
         this.hostSceneKey = data.hostSceneKey ?? '';
         this.pausedScenes = data.pausedScenes ?? [];
+        this.hotkey = data.hotkey ?? 'F2';
     }
 
     create(): void {
@@ -93,37 +91,21 @@ export class EditorScene extends Phaser.Scene {
         this.gfx = this.add.graphics();
         this.gfx.setDepth(EDITOR_DEPTH);
 
-        // Status indicator
-        this.statusText = this.add.text(10, 10, 'EDITOR MODE — Press F2 to exit', {
-            fontFamily: 'monospace',
-            fontSize: '14px',
-            color: '#00ff88',
-            backgroundColor: '#000000aa',
-            padding: { x: 8, y: 4 }
-        });
-        this.statusText.setDepth(EDITOR_DEPTH + 1);
-        this.statusText.setScrollFactor(0);
-
-        // Coordinate bar (bottom of screen)
-        this.coordText = this.add.text(10, height - 28, '', {
-            fontFamily: 'monospace',
-            fontSize: '12px',
-            color: '#aaccff',
-            backgroundColor: '#000000aa',
-            padding: { x: 6, y: 3 }
-        });
-        this.coordText.setDepth(EDITOR_DEPTH + 1);
-        this.coordText.setScrollFactor(0);
-
         // Draw the design-space boundary
         this.drawDesignBounds();
 
-        // Create HTML overlay container and UI panels
-        this.createHtmlContainer();
+        // Create editor frame (moves canvas into grid, panels beside it)
+        this.editorFrame = new EditorFrame(this.game);
+        this.editorFrame.setStatusText(`EDITOR MODE — Press ${this.hotkey} to exit`);
+
         this.editorUI = new EditorUI(
             this.editorState,
             this.coordSystem,
-            this.htmlContainer!,
+            {
+                toolbar: this.editorFrame.toolbarSlot,
+                hierarchy: this.editorFrame.hierarchySlot,
+                inspector: this.editorFrame.inspectorSlot,
+            },
             this.getHostScene()!,
             this.game,
             this.pausedScenes,
@@ -201,7 +183,7 @@ export class EditorScene extends Phaser.Scene {
             text += `    |    ${name}: design(${Math.round(design.x)}, ${Math.round(design.y)})  screen(${Math.round(world.x)}, ${Math.round(world.y)})`;
         }
 
-        this.coordText.setText(text);
+        this.editorFrame.setStatusText(text);
     }
 
     /**
@@ -249,47 +231,12 @@ export class EditorScene extends Phaser.Scene {
         }
     }
 
-    /**
-     * Create the HTML overlay container for future Tweakpane panels (Phase 4+).
-     */
-    private createHtmlContainer(): void {
-        if (this.htmlContainer) return;
-
-        this.htmlContainer = document.createElement('div');
-        this.htmlContainer.id = 'phaser-editor-ui';
-        this.htmlContainer.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 1000;
-            font-family: monospace;
-        `;
-        document.body.appendChild(this.htmlContainer);
-    }
-
-    /**
-     * Remove the HTML overlay container.
-     */
-    private destroyHtmlContainer(): void {
-        if (this.htmlContainer) {
-            this.htmlContainer.remove();
-            this.htmlContainer = null;
-        }
-    }
-
     private onResize(): void {
         const { width, height } = this.cameras.main;
 
         if (this.overlay) {
             this.overlay.setPosition(width / 2, height / 2);
             this.overlay.setSize(width, height);
-        }
-
-        if (this.coordText) {
-            this.coordText.setPosition(10, height - 28);
         }
     }
 
@@ -301,7 +248,7 @@ export class EditorScene extends Phaser.Scene {
         this.gizmoMgr?.destroy();
         this.editorState?.destroy();
         this.selectionMgr?.destroy();
-        this.destroyHtmlContainer();
+        this.editorFrame?.destroy();
         this.scale.off('resize', this.onResize, this);
     }
 }

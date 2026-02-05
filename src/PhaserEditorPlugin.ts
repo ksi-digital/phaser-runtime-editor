@@ -148,7 +148,8 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
             designWidth: this.config.designWidth,
             designHeight: this.config.designHeight,
             hostSceneKey: hostKey,
-            pausedScenes: Array.from(this.pausedScenes)
+            pausedScenes: Array.from(this.pausedScenes),
+            hotkey: this.config.hotkey,
         });
 
         // Now pause all game scenes
