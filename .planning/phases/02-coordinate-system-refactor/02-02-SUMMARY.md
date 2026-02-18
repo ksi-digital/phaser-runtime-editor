@@ -133,6 +133,16 @@ None.
 - All requirements COORD-01 through COORD-05 are fulfilled across plans 01 and 02
 - Phase 3 (Object Identification) can proceed immediately
 
+## Self-Check: PASSED
+
+- All 10 source files found and verified
+- Commits 0f9d1d4 and f9a3cb5 confirmed in git log
+- `npx tsc --noEmit` passes with zero errors
+- `getWorldPosition` zero call sites (comments only)
+- `getTransformHelpers` zero occurrences in codebase
+- `cachedInvParentMatrix` confirmed in MoveGizmo.ts (5 references)
+- `captureViewport` called in EditorScene.update()
+
 ---
 *Phase: 02-coordinate-system-refactor*
 *Completed: 2026-02-18*
