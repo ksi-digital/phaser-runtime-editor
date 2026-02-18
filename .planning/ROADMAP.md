@@ -24,6 +24,11 @@
 
 **Risk:** LOW — CSS-only change + observer guard. No coordinate math changes.
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 01-01-PLAN.md — Fix CSS grid columns, add ResizeObserver change guard, harden destroy ordering
+
 ---
 
 ## Phase 2: Coordinate System Refactor — ViewportState + Centralized Transforms
