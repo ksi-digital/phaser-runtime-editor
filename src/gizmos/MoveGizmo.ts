@@ -107,7 +107,7 @@ export class MoveGizmo {
         selectionMgr: SelectionManager,
         vp: ViewportState,
     ): void {
-        const bounds = selectionMgr.getScreenBounds(obj);
+        const bounds = selectionMgr.getScreenBounds(obj, vp);
         if (bounds) {
             this.cx = bounds.x + bounds.width / 2;
             this.cy = bounds.y + bounds.height / 2;

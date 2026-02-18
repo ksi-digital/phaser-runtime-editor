@@ -61,8 +61,10 @@ export class SelectionManager {
      * or null if nothing was hit.
      *
      * For Containers: tests the union bounds of the Container (not individual children).
+     *
+     * @param vp ViewportState snapshot for correct world→screen projection.
      */
-    hitTest(screenX: number, screenY: number): Phaser.GameObjects.GameObject | null {
+    hitTest(screenX: number, screenY: number, vp: ViewportState): Phaser.GameObjects.GameObject | null {
         const objects = this.getSelectableObjects();
         let best: Phaser.GameObjects.GameObject | null = null;
         let bestDepth = -Infinity;
@@ -70,7 +72,7 @@ export class SelectionManager {
         for (const obj of objects) {
             if ('visible' in obj && !(obj as any).visible) continue;
 
-            const bounds = this.getScreenBounds(obj);
+            const bounds = this.getScreenBounds(obj, vp);
             if (!bounds) continue;
 
             if (
@@ -95,11 +97,13 @@ export class SelectionManager {
      * For Containers, computes the union bounds of all children.
      * For Polygon Shapes, computes bounds from geometry vertices (Phaser's
      * getBounds() is incorrect when polygon vertices have negative coordinates).
+     *
+     * @param vp ViewportState snapshot used to project world-space bounds to screen-space.
      */
-    getScreenBounds(obj: Phaser.GameObjects.GameObject): Phaser.Geom.Rectangle | null {
+    getScreenBounds(obj: Phaser.GameObjects.GameObject, vp: ViewportState): Phaser.Geom.Rectangle | null {
         // Container: compute union of children bounds
         if (obj instanceof Phaser.GameObjects.Container) {
-            return this.getContainerBounds(obj);
+            return this.getContainerBounds(obj, vp);
         }
 
         // Polygon Shape: getBounds() is known to return wrong results for
@@ -109,10 +113,20 @@ export class SelectionManager {
             return this.getPolygonShapeBounds(obj);
         }
 
-        // Regular object: use getBounds if available
+        // Regular object: use getBounds if available, then project to screen-space
         if ('getBounds' in obj && typeof (obj as any).getBounds === 'function') {
             try {
-                return (obj as any).getBounds() as Phaser.Geom.Rectangle;
+                const worldBounds = (obj as any).getBounds() as Phaser.Geom.Rectangle;
+                // Project all 4 corners from world to screen and compute AABB
+                const tl = this.coords.worldToScreen(worldBounds.x, worldBounds.y, vp);
+                const tr = this.coords.worldToScreen(worldBounds.x + worldBounds.width, worldBounds.y, vp);
+                const bl = this.coords.worldToScreen(worldBounds.x, worldBounds.y + worldBounds.height, vp);
+                const br = this.coords.worldToScreen(worldBounds.x + worldBounds.width, worldBounds.y + worldBounds.height, vp);
+                const minX = Math.min(tl.x, tr.x, bl.x, br.x);
+                const minY = Math.min(tl.y, tr.y, bl.y, br.y);
+                const maxX = Math.max(tl.x, tr.x, bl.x, br.x);
+                const maxY = Math.max(tl.y, tr.y, bl.y, br.y);
+                return new Phaser.Geom.Rectangle(minX, minY, maxX - minX, maxY - minY);
             } catch {
                 return null;
             }
@@ -126,6 +140,11 @@ export class SelectionManager {
      * CoordinateSystem.getHitAreaToScreen() helper.
      * Phaser's built-in getBounds() returns wrong results when polygon
      * vertices have negative coordinates.
+     *
+     * NOTE: The polygon path uses getHitAreaToScreen() which applies the world
+     * matrix directly (screen-correct for Phaser's shared GL render context).
+     * This works correctly for the default camera. For non-default cameras,
+     * this is a known limitation (separate from the two reported bugs).
      */
     private getPolygonShapeBounds(poly: Phaser.GameObjects.Polygon): Phaser.Geom.Rectangle | null {
         const geom = (poly as any).geom as Phaser.Geom.Polygon;
@@ -150,11 +169,12 @@ export class SelectionManager {
     /**
      * Compute the union bounding box of a Container's children in screen-space.
      */
-    private getContainerBounds(container: Phaser.GameObjects.Container): Phaser.Geom.Rectangle | null {
+    private getContainerBounds(container: Phaser.GameObjects.Container, vp: ViewportState): Phaser.Geom.Rectangle | null {
         if (container.list.length === 0) {
             // Empty container — use its own position with a minimum size
             const t = container as Phaser.GameObjects.Components.Transform;
-            return new Phaser.Geom.Rectangle(t.x - 16, t.y - 16, 32, 32);
+            const screen = this.coords.worldToScreen(t.x, t.y, vp);
+            return new Phaser.Geom.Rectangle(screen.x - 16, screen.y - 16, 32, 32);
         }
 
         let minX = Infinity;
@@ -163,7 +183,7 @@ export class SelectionManager {
         let maxY = -Infinity;
 
         for (const child of container.list) {
-            const childBounds = this.getChildWorldBounds(child as Phaser.GameObjects.GameObject, container);
+            const childBounds = this.getChildWorldBounds(child as Phaser.GameObjects.GameObject, container, vp);
             if (!childBounds) continue;
 
             minX = Math.min(minX, childBounds.x);
@@ -177,27 +197,39 @@ export class SelectionManager {
     }
 
     /**
-     * Get the world-space bounds of a child within a Container.
+     * Get the screen-space bounds of a child within a Container.
+     * Projects world-space child bounds through the camera via worldToScreen().
      */
     private getChildWorldBounds(
         child: Phaser.GameObjects.GameObject,
         _container: Phaser.GameObjects.Container,
+        vp: ViewportState,
     ): Phaser.Geom.Rectangle | null {
         if ('getBounds' in child && typeof (child as any).getBounds === 'function') {
             try {
-                return (child as any).getBounds() as Phaser.Geom.Rectangle;
+                const worldBounds = (child as any).getBounds() as Phaser.Geom.Rectangle;
+                // Project all 4 corners from world to screen and compute AABB
+                const tl = this.coords.worldToScreen(worldBounds.x, worldBounds.y, vp);
+                const tr = this.coords.worldToScreen(worldBounds.x + worldBounds.width, worldBounds.y, vp);
+                const bl = this.coords.worldToScreen(worldBounds.x, worldBounds.y + worldBounds.height, vp);
+                const br = this.coords.worldToScreen(worldBounds.x + worldBounds.width, worldBounds.y + worldBounds.height, vp);
+                const minX = Math.min(tl.x, tr.x, bl.x, br.x);
+                const minY = Math.min(tl.y, tr.y, bl.y, br.y);
+                const maxX = Math.max(tl.x, tr.x, bl.x, br.x);
+                const maxY = Math.max(tl.y, tr.y, bl.y, br.y);
+                return new Phaser.Geom.Rectangle(minX, minY, maxX - minX, maxY - minY);
             } catch {
                 return null;
             }
         }
 
-        // Fallback: use world transform matrix tx/ty + small default size
-        // (getWorldTransformMatrix().tx/ty gives the screen-space position for
-        // Container children in Phaser's shared GL context)
+        // Fallback: use world transform matrix tx/ty + small default size,
+        // projected through camera
         if ('getWorldTransformMatrix' in child && typeof (child as any).getWorldTransformMatrix === 'function') {
             try {
                 const matrix = (child as any).getWorldTransformMatrix() as Phaser.GameObjects.Components.TransformMatrix;
-                return new Phaser.Geom.Rectangle(matrix.tx - 8, matrix.ty - 8, 16, 16);
+                const screen = this.coords.worldToScreen(matrix.tx, matrix.ty, vp);
+                return new Phaser.Geom.Rectangle(screen.x - 8, screen.y - 8, 16, 16);
             } catch {
                 return null;
             }
@@ -209,12 +241,14 @@ export class SelectionManager {
     /**
      * Draw the selection bounding box onto a Graphics object.
      * Call this every frame from EditorScene.update().
+     *
+     * @param vp ViewportState snapshot for correct world→screen projection.
      */
-    drawSelection(gfx: Phaser.GameObjects.Graphics): void {
+    drawSelection(gfx: Phaser.GameObjects.Graphics, vp: ViewportState): void {
         const selected = this.state.selected;
         if (!selected) return;
 
-        const bounds = this.getScreenBounds(selected);
+        const bounds = this.getScreenBounds(selected, vp);
         if (!bounds) return;
 
         // Selection rectangle

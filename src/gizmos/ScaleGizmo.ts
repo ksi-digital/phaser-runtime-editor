@@ -69,10 +69,11 @@ export class ScaleGizmo {
         gfx: Phaser.GameObjects.Graphics,
         obj: Phaser.GameObjects.GameObject,
         selectionMgr: SelectionManager,
+        vp: ViewportState,
     ): void {
         // Only update geometry when NOT dragging (freeze during drag)
         if (!this.isDragging) {
-            this.bounds = selectionMgr.getScreenBounds(obj);
+            this.bounds = selectionMgr.getScreenBounds(obj, vp);
             if (this.bounds) {
                 this.cx = this.bounds.x + this.bounds.width / 2;
                 this.cy = this.bounds.y + this.bounds.height / 2;

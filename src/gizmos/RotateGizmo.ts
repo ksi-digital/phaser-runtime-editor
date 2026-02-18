@@ -207,7 +207,7 @@ export class RotateGizmo {
         selectionMgr: SelectionManager,
         vp: ViewportState,
     ): number {
-        const bounds = selectionMgr.getScreenBounds(obj);
+        const bounds = selectionMgr.getScreenBounds(obj, vp);
         if (!bounds) return 40;
 
         // Distance from object origin to farthest corner of bounding rect

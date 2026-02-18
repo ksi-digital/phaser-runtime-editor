@@ -125,17 +125,21 @@ export class EditorScene extends Phaser.Scene {
                 return;
             }
 
-            const hit = this.selectionMgr.hitTest(pointer.x, pointer.y);
+            // Capture a ViewportState for hit-testing with correct screen-space bounds
+            const hostScene = this.getHostScene();
+            const vp = hostScene
+                ? captureViewport(this.designWidth, this.designHeight, hostScene, this)
+                : null;
+
+            const hit = vp
+                ? this.selectionMgr.hitTest(pointer.x, pointer.y, vp)
+                : null;
             this.editorState.selected = hit;
 
-            if (hit) {
-                const hostScene = this.getHostScene();
-                if (hostScene) {
-                    const vp = captureViewport(this.designWidth, this.designHeight, hostScene, this);
-                    const name = SelectionManager.getObjectName(hit);
-                    const design = this.coordSystem.getDesignPosition(hit, vp);
-                    console.log(`[Editor] Selected: ${name} at design(${Math.round(design.x)}, ${Math.round(design.y)})`);
-                }
+            if (hit && vp) {
+                const name = SelectionManager.getObjectName(hit);
+                const design = this.coordSystem.getDesignPosition(hit, vp);
+                console.log(`[Editor] Selected: ${name} at design(${Math.round(design.x)}, ${Math.round(design.y)})`);
             }
         });
 
@@ -171,7 +175,9 @@ export class EditorScene extends Phaser.Scene {
             ? captureViewport(this.designWidth, this.designHeight, hostScene, this)
             : null;
 
-        this.selectionMgr.drawSelection(this.gfx);
+        if (vp) {
+            this.selectionMgr.drawSelection(this.gfx, vp);
+        }
 
         // Draw hit area overlay on selected object (not in hit area edit mode,
         // since HitAreaGizmo draws its own enhanced version with handles)

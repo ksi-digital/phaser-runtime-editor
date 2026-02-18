@@ -105,7 +105,7 @@ export class GizmoManager {
             } else if (tool === EditorTool.Rotate) {
                 this.rotateGizmo.draw(gfx, selected, this.selectionMgr, vp);
             } else if (tool === EditorTool.Scale) {
-                this.scaleGizmo.draw(gfx, selected, this.selectionMgr);
+                this.scaleGizmo.draw(gfx, selected, this.selectionMgr, vp);
             }
         }
 
