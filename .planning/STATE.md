@@ -23,6 +23,7 @@
 | # | Task | Date | Commit |
 |---|------|------|--------|
 | 1 | Fix hierarchy panel scrollbar erratic bounce-back | 2026-02-18 | 9f2b7e9 |
+| 2 | Fix Phase 2 bugs: bounding box misalignment + move gizmo drift | 2026-02-18 | ddc39ee |
 
 ## Key Decisions
 
@@ -42,11 +43,13 @@
 | Hit-area helpers use world matrix only (no ViewportState) | 2026-02-18 | Phaser shared GL context makes matrix.tx/ty screen-correct for rendering |
 | GizmoManager stores editorScene field | 2026-02-18 | Required to call captureViewport() at pointer-down time for drag-start snapshot |
 | ScaleGizmo stores vp but doesn't use in updateDrag | 2026-02-18 | Scale drag operates purely in screen-space (distance ratios); vp stored for API consistency |
-| SelectionManager.drawSelection() has no vp param | 2026-02-18 | Selection rendering uses world matrix (rendering path), not camera projection path |
+| Correct Phaser camera formula: (worldX - scrollX - centerX) * zoom + centerX | 2026-02-18 | Phase 2 had wrong formula (missing - centerX inside parens); fixed in quick-2 |
+| setDesignPosition flow: design→screen→world before obj.x/y | 2026-02-18 | Must invert camera projection when writing world-space coords; was causing move gizmo drift |
+| getScreenBounds always projects through worldToScreen() | 2026-02-18 | getBounds() returns world-space; must project to screen-space for drawing on overlay |
 
 ## Blockers
 
 None.
 
 ---
-*Last updated: 2026-02-18 after completing Phase 2 Plan 02 (ViewportState consumer migration + gizmo threading)*
+*Last updated: 2026-02-18 after Quick Task 2 (fix bounding box misalignment + move gizmo drift — correct Phaser camera projection formula)*
