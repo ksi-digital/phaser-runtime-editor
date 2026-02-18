@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import type { SelectionManager } from '../core/SelectionManager';
+import type { ViewportState } from '../core/ViewportState';
 
 export enum ScaleHandle {
     None = 'none',
@@ -42,7 +43,8 @@ export class ScaleGizmo {
     private objStartScaleX = 1;
     private objStartScaleY = 1;
     private target: Phaser.GameObjects.GameObject | null = null;
-    private hostScene: Phaser.Scene | null = null;
+    /** ViewportState frozen at drag start (per COORD-03). */
+    private vp: ViewportState | null = null;
     private currentScaleX = 1;
     private currentScaleY = 1;
     private lastPointerX = 0;
@@ -169,19 +171,20 @@ export class ScaleGizmo {
 
     /**
      * Begin a scale drag.
+     * Freezes a ViewportState snapshot at drag start (per COORD-03).
      */
     startDrag(
         handle: ScaleHandle,
         screenX: number,
         screenY: number,
         target: Phaser.GameObjects.GameObject,
-        hostScene: Phaser.Scene,
+        vp: ViewportState,
     ): void {
         this.activeHandle = handle;
         this.dragStartX = screenX;
         this.dragStartY = screenY;
         this.target = target;
-        this.hostScene = hostScene;
+        this.vp = vp;
         this.lastPointerX = screenX;
         this.lastPointerY = screenY;
 
@@ -258,7 +261,7 @@ export class ScaleGizmo {
     endDrag(): void {
         this.activeHandle = ScaleHandle.None;
         this.target = null;
-        this.hostScene = null;
+        this.vp = null;
     }
 
     /**

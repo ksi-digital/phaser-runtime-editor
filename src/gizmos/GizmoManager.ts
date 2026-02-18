@@ -7,6 +7,7 @@ import { MoveGizmo, DragHandle } from './MoveGizmo';
 import { RotateGizmo, RotateHandle } from './RotateGizmo';
 import { ScaleGizmo, ScaleHandle } from './ScaleGizmo';
 import { HitAreaGizmo, HitAreaHandle } from './HitAreaGizmo';
+import { captureViewport, type ViewportState } from '../core/ViewportState';
 
 /**
  * Coordinates which gizmo is active based on the current tool and selection.
@@ -14,6 +15,7 @@ import { HitAreaGizmo, HitAreaHandle } from './HitAreaGizmo';
  */
 export class GizmoManager {
     private state: EditorState;
+    private coords: CoordinateSystem;
     private moveGizmo: MoveGizmo;
     private rotateGizmo: RotateGizmo;
     private scaleGizmo: ScaleGizmo;
@@ -21,6 +23,8 @@ export class GizmoManager {
     private selectionMgr: SelectionManager;
     private hostSceneKey: string;
     private game: Phaser.Game;
+    /** Editor overlay scene — used for canvas pixel dimensions in captureViewport(). */
+    private editorScene: Phaser.Scene;
 
     /** Shared text label for displaying angle/scale during drag. */
     private dragLabel: Phaser.GameObjects.Text;
@@ -36,9 +40,11 @@ export class GizmoManager {
         getSelectableObjects?: () => Phaser.GameObjects.GameObject[],
     ) {
         this.state = state;
+        this.coords = coords;
         this.game = game;
         this.hostSceneKey = hostSceneKey;
         this.selectionMgr = selectionMgr;
+        this.editorScene = editorScene;
 
         this.moveGizmo = new MoveGizmo(coords);
         this.rotateGizmo = new RotateGizmo(coords);
@@ -75,8 +81,9 @@ export class GizmoManager {
     /**
      * Draw the active gizmo for the current selection.
      * Called every frame from EditorScene.update().
+     * vp is the per-frame ViewportState snapshot (null if no host scene available).
      */
-    draw(gfx: Phaser.GameObjects.Graphics): void {
+    draw(gfx: Phaser.GameObjects.Graphics, vp: ViewportState | null): void {
         const selected = this.state.selected;
         if (!selected) {
             this.dragLabel.setVisible(false);
@@ -92,12 +99,14 @@ export class GizmoManager {
 
         const tool = this.state.activeTool;
 
-        if (tool === EditorTool.Move) {
-            this.moveGizmo.draw(gfx, selected, this.selectionMgr);
-        } else if (tool === EditorTool.Rotate) {
-            this.rotateGizmo.draw(gfx, selected, this.selectionMgr);
-        } else if (tool === EditorTool.Scale) {
-            this.scaleGizmo.draw(gfx, selected, this.selectionMgr);
+        if (vp) {
+            if (tool === EditorTool.Move) {
+                this.moveGizmo.draw(gfx, selected, this.selectionMgr, vp);
+            } else if (tool === EditorTool.Rotate) {
+                this.rotateGizmo.draw(gfx, selected, this.selectionMgr, vp);
+            } else if (tool === EditorTool.Scale) {
+                this.scaleGizmo.draw(gfx, selected, this.selectionMgr);
+            }
         }
 
         this.updateDragLabel();
@@ -114,11 +123,19 @@ export class GizmoManager {
         const hostScene = this.game.scene.getScene(this.hostSceneKey);
         if (!hostScene) return false;
 
+        // Capture a stable ViewportState snapshot for this drag operation
+        const vp = captureViewport(
+            this.coords.designWidth,
+            this.coords.designHeight,
+            hostScene,
+            this.editorScene,
+        );
+
         // Hit area edit mode — test hit area gizmo first
         if (this.state.editingHitArea && (selected as any).input?.hitArea) {
             const handle = this.hitAreaGizmo.hitTest(screenX, screenY);
             if (handle !== HitAreaHandle.None) {
-                this.hitAreaGizmo.startDrag(handle, screenX, screenY, selected, hostScene);
+                this.hitAreaGizmo.startDrag(handle, screenX, screenY, selected, vp);
                 return true;
             }
             // Click outside hit area handles → exit hit area edit mode
@@ -131,19 +148,19 @@ export class GizmoManager {
         if (tool === EditorTool.Move) {
             const handle = this.moveGizmo.hitTest(screenX, screenY);
             if (handle !== DragHandle.None) {
-                this.moveGizmo.startDrag(handle, screenX, screenY, selected, hostScene);
+                this.moveGizmo.startDrag(handle, screenX, screenY, selected, vp);
                 return true;
             }
         } else if (tool === EditorTool.Rotate) {
             const handle = this.rotateGizmo.hitTest(screenX, screenY);
             if (handle !== RotateHandle.None) {
-                this.rotateGizmo.startDrag(handle, screenX, screenY, selected, hostScene);
+                this.rotateGizmo.startDrag(handle, screenX, screenY, selected, vp);
                 return true;
             }
         } else if (tool === EditorTool.Scale) {
             const handle = this.scaleGizmo.hitTest(screenX, screenY);
             if (handle !== ScaleHandle.None) {
-                this.scaleGizmo.startDrag(handle, screenX, screenY, selected, hostScene);
+                this.scaleGizmo.startDrag(handle, screenX, screenY, selected, vp);
                 return true;
             }
         }

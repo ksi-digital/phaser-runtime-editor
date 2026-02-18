@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import type { SelectionManager } from '../core/SelectionManager';
+import type { ViewportState } from '../core/ViewportState';
 
 export enum HitAreaHandle {
     None = 'none',
@@ -48,6 +49,9 @@ interface HitAreaSnapshot {
  * - Edge handles (orange rects, Rectangle only): drag to resize one axis
  *
  * Works for Rectangle, Circle, and Polygon hit areas.
+ *
+ * Uses CoordinateSystem.getHitAreaToScreen() and getHitAreaScreenDeltaToLocal()
+ * for all coordinate transforms (eliminates the local getTransformHelpers() duplicate).
  */
 export class HitAreaGizmo {
     private coords: CoordinateSystem;
@@ -60,7 +64,8 @@ export class HitAreaGizmo {
     private dragStartScreenX = 0;
     private dragStartScreenY = 0;
     private target: Phaser.GameObjects.GameObject | null = null;
-    private hostScene: Phaser.Scene | null = null;
+    /** ViewportState frozen at drag start (per COORD-03). */
+    private vp: ViewportState | null = null;
     private startSnapshot: HitAreaSnapshot | null = null;
     private lastPointerX = 0;
     private lastPointerY = 0;
@@ -88,7 +93,7 @@ export class HitAreaGizmo {
         if (!input?.hitArea) return;
 
         const hitArea = input.hitArea;
-        const { toScreen } = this.getTransformHelpers(obj);
+        const toScreen = this.coords.getHitAreaToScreen(obj);
 
         // Draw the hit area shape outline (same as EditorScene.drawHitArea)
         this.drawHitAreaShape(gfx, obj, hitArea, toScreen);
@@ -157,13 +162,13 @@ export class HitAreaGizmo {
         screenX: number,
         screenY: number,
         target: Phaser.GameObjects.GameObject,
-        hostScene: Phaser.Scene,
+        vp: ViewportState,
     ): void {
         this.activeHandle = handle;
         this.dragStartScreenX = screenX;
         this.dragStartScreenY = screenY;
         this.target = target;
-        this.hostScene = hostScene;
+        this.vp = vp;
         this.lastPointerX = screenX;
         this.lastPointerY = screenY;
 
@@ -226,7 +231,7 @@ export class HitAreaGizmo {
     endDrag(): void {
         this.activeHandle = HitAreaHandle.None;
         this.target = null;
-        this.hostScene = null;
+        this.vp = null;
         this.startSnapshot = null;
     }
 
@@ -254,36 +259,6 @@ export class HitAreaGizmo {
     destroy(): void {
         this.endDrag();
         this.handlePositions.clear();
-    }
-
-    // ── Coordinate helpers ────────────────────────────────────────
-
-    private getTransformHelpers(obj: Phaser.GameObjects.GameObject): {
-        toScreen: (lx: number, ly: number) => { x: number; y: number };
-        screenDeltaToLocal: (dsx: number, dsy: number) => { dx: number; dy: number };
-    } {
-        const matrix: Phaser.GameObjects.Components.TransformMatrix =
-            (obj as any).getWorldTransformMatrix();
-        const isContainer = obj instanceof Phaser.GameObjects.Container;
-        const doX = isContainer ? 0 : ((obj as any).displayOriginX ?? 0);
-        const doY = isContainer ? 0 : ((obj as any).displayOriginY ?? 0);
-
-        const toScreen = (lx: number, ly: number) => {
-            const adjX = lx - doX;
-            const adjY = ly - doY;
-            return {
-                x: matrix.a * adjX + matrix.c * adjY + matrix.tx,
-                y: matrix.b * adjX + matrix.d * adjY + matrix.ty,
-            };
-        };
-
-        const det = matrix.a * matrix.d - matrix.b * matrix.c;
-        const screenDeltaToLocal = (dsx: number, dsy: number) => ({
-            dx: (matrix.d * dsx - matrix.c * dsy) / det,
-            dy: (-matrix.b * dsx + matrix.a * dsy) / det,
-        });
-
-        return { toScreen, screenDeltaToLocal };
     }
 
     // ── Draw helpers ──────────────────────────────────────────────
@@ -492,7 +467,7 @@ export class HitAreaGizmo {
     // ── Move operations ───────────────────────────────────────────
 
     private updateMoveRect(dsx: number, dsy: number): void {
-        const { screenDeltaToLocal } = this.getTransformHelpers(this.target!);
+        const screenDeltaToLocal = this.coords.getHitAreaScreenDeltaToLocal(this.target!);
         const local = screenDeltaToLocal(dsx, dsy);
         const ha = (this.target as any).input.hitArea as Phaser.Geom.Rectangle;
         ha.x = this.startSnapshot!.rx! + local.dx;
@@ -500,7 +475,7 @@ export class HitAreaGizmo {
     }
 
     private updateMoveCircle(dsx: number, dsy: number): void {
-        const { screenDeltaToLocal } = this.getTransformHelpers(this.target!);
+        const screenDeltaToLocal = this.coords.getHitAreaScreenDeltaToLocal(this.target!);
         const local = screenDeltaToLocal(dsx, dsy);
         const ha = (this.target as any).input.hitArea as Phaser.Geom.Circle;
         ha.x = this.startSnapshot!.cx! + local.dx;
@@ -508,7 +483,7 @@ export class HitAreaGizmo {
     }
 
     private updateMovePolygon(dsx: number, dsy: number): void {
-        const { screenDeltaToLocal } = this.getTransformHelpers(this.target!);
+        const screenDeltaToLocal = this.coords.getHitAreaScreenDeltaToLocal(this.target!);
         const local = screenDeltaToLocal(dsx, dsy);
         const ha = (this.target as any).input.hitArea as Phaser.Geom.Polygon;
         const startPts = this.startSnapshot!.points!;
@@ -521,7 +496,7 @@ export class HitAreaGizmo {
     // ── Scale operations ──────────────────────────────────────────
 
     private updateScaleRect(handle: HitAreaHandle, dsx: number, dsy: number): void {
-        const { screenDeltaToLocal } = this.getTransformHelpers(this.target!);
+        const screenDeltaToLocal = this.coords.getHitAreaScreenDeltaToLocal(this.target!);
         const local = screenDeltaToLocal(dsx, dsy);
         const ha = (this.target as any).input.hitArea as Phaser.Geom.Rectangle;
         const s = this.startSnapshot!;
@@ -561,7 +536,7 @@ export class HitAreaGizmo {
     }
 
     private updateScaleCircle(screenX: number, screenY: number): void {
-        const { toScreen } = this.getTransformHelpers(this.target!);
+        const toScreen = this.coords.getHitAreaToScreen(this.target!);
         const centerScreen = toScreen(this.startSnapshot!.cx!, this.startSnapshot!.cy!);
 
         const startDist = Math.hypot(
@@ -581,7 +556,7 @@ export class HitAreaGizmo {
     }
 
     private updateScalePolygon(screenX: number, screenY: number): void {
-        const { toScreen } = this.getTransformHelpers(this.target!);
+        const toScreen = this.coords.getHitAreaToScreen(this.target!);
         const startPts = this.startSnapshot!.points!;
 
         // Compute centroid of start points

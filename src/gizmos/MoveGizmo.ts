@@ -3,6 +3,7 @@ import { CoordinateSystem } from '../core/CoordinateSystem';
 import { SelectionManager } from '../core/SelectionManager';
 import { SnappingEngine, SnapGuide } from '../core/SnappingEngine';
 import type { SnappingConfig } from '../core/EditorState';
+import type { ViewportState } from '../core/ViewportState';
 
 export enum DragHandle {
     None = 'none',
@@ -53,8 +54,14 @@ export class MoveGizmo {
     /** The object currently being manipulated. */
     private target: Phaser.GameObjects.GameObject | null = null;
 
-    /** The host scene (game scene) for coordinate conversions. */
-    private hostScene: Phaser.Scene | null = null;
+    /** The viewport state frozen at drag start. */
+    private vp: ViewportState | null = null;
+
+    /**
+     * Inverse parent matrix cached at drag start to avoid per-frame matrix inversion.
+     * Null if the target has no parentContainer.
+     */
+    private cachedInvParentMatrix: Phaser.GameObjects.Components.TransformMatrix | null = null;
 
     /** Snap guides produced during the last drag update. */
     private _snapGuides: SnapGuide[] = [];
@@ -91,17 +98,23 @@ export class MoveGizmo {
     /**
      * Draw the move gizmo handles at the visual center of the selected object.
      * Uses the bounding box center so it aligns with the visual for all objects,
-     * including Polygon shapes where getWorldPosition() doesn't match the visual center.
+     * including Polygon shapes where getScreenPosition() doesn't match the visual center.
+     * vp is used as a fallback when selectionMgr.getScreenBounds() returns null.
      */
-    draw(gfx: Phaser.GameObjects.Graphics, obj: Phaser.GameObjects.GameObject, selectionMgr: SelectionManager): void {
+    draw(
+        gfx: Phaser.GameObjects.Graphics,
+        obj: Phaser.GameObjects.GameObject,
+        selectionMgr: SelectionManager,
+        vp: ViewportState,
+    ): void {
         const bounds = selectionMgr.getScreenBounds(obj);
         if (bounds) {
             this.cx = bounds.x + bounds.width / 2;
             this.cy = bounds.y + bounds.height / 2;
         } else {
-            const world = this.coords.getWorldPosition(obj);
-            this.cx = world.x;
-            this.cy = world.y;
+            const screen = this.coords.getScreenPosition(obj, vp);
+            this.cx = screen.x;
+            this.cy = screen.y;
         }
 
         // --- X axis arrow (red, pointing right) ---
@@ -174,24 +187,34 @@ export class MoveGizmo {
 
     /**
      * Begin a drag operation on a specific handle.
+     * Freezes a ViewportState snapshot and caches the inverse parent matrix
+     * to avoid per-frame recomputation during the drag.
      */
     startDrag(
         handle: DragHandle,
         screenX: number,
         screenY: number,
         target: Phaser.GameObjects.GameObject,
-        hostScene: Phaser.Scene,
+        vp: ViewportState,
     ): void {
         this.activeHandle = handle;
         this.dragStartX = screenX;
         this.dragStartY = screenY;
         this.target = target;
-        this.hostScene = hostScene;
+        this.vp = vp;
 
         // Record the object's current design-space position
-        const designPos = this.coords.getDesignPosition(target, hostScene);
+        const designPos = this.coords.getDesignPosition(target, vp);
         this.objStartDesignX = designPos.x;
         this.objStartDesignY = designPos.y;
+
+        // Cache the inverse parent matrix at drag start (COORD-05)
+        this.cachedInvParentMatrix = null;
+        if ('parentContainer' in target && (target as any).parentContainer) {
+            const parent = (target as any).parentContainer as Phaser.GameObjects.Container;
+            const m = parent.getWorldTransformMatrix();
+            this.cachedInvParentMatrix = m.invert();
+        }
     }
 
     /**
@@ -199,9 +222,10 @@ export class MoveGizmo {
      * Converts screen delta to design-space delta and applies the active constraint.
      */
     updateDrag(screenX: number, screenY: number): void {
-        if (this.activeHandle === DragHandle.None || !this.target || !this.hostScene) return;
+        if (this.activeHandle === DragHandle.None || !this.target || !this.vp) return;
 
-        const sf = this.coords.getScaleFactor(this.hostScene);
+        // Use frozen scale factor from drag-start ViewportState (no live camera read)
+        const sf = this.vp.scaleFactor;
 
         // Screen-space delta → design-space delta
         const deltaScreenX = screenX - this.dragStartX;
@@ -228,7 +252,7 @@ export class MoveGizmo {
                 this.snappingConfig,
                 allObjects,
                 this.coords,
-                this.hostScene,
+                this.vp,
                 this.target,
             );
             newDesignX = result.point.x;
@@ -236,7 +260,13 @@ export class MoveGizmo {
             this._snapGuides = result.guides;
         }
 
-        this.coords.setDesignPosition(this.target, newDesignX, newDesignY, this.hostScene);
+        this.coords.setDesignPosition(
+            this.target,
+            newDesignX,
+            newDesignY,
+            this.vp,
+            this.cachedInvParentMatrix,
+        );
     }
 
     /**
@@ -245,7 +275,8 @@ export class MoveGizmo {
     endDrag(): void {
         this.activeHandle = DragHandle.None;
         this.target = null;
-        this.hostScene = null;
+        this.vp = null;
+        this.cachedInvParentMatrix = null;
         this._snapGuides = [];
     }
 

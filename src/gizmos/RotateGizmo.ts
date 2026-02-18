@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import type { SnappingConfig } from '../core/EditorState';
 import type { SelectionManager } from '../core/SelectionManager';
+import type { ViewportState } from '../core/ViewportState';
 
 export enum RotateHandle {
     None = 'none',
@@ -35,7 +36,8 @@ export class RotateGizmo {
     private dragStartAngle = 0;   // pointer angle at drag start (degrees)
     private objStartAngle = 0;    // object's angle at drag start (degrees)
     private target: Phaser.GameObjects.GameObject | null = null;
-    private hostScene: Phaser.Scene | null = null;
+    /** ViewportState frozen at drag start (per COORD-03). */
+    private vp: ViewportState | null = null;
     private currentAngle = 0;     // current angle during drag (for label)
     private lastPointerX = 0;
     private lastPointerY = 0;
@@ -58,19 +60,21 @@ export class RotateGizmo {
 
     /**
      * Draw the rotate gizmo for the given object.
+     * vp is required to compute the screen-space position via getScreenPosition().
      */
     draw(
         gfx: Phaser.GameObjects.Graphics,
         obj: Phaser.GameObjects.GameObject,
         selectionMgr: SelectionManager,
+        vp: ViewportState,
     ): void {
-        const world = this.coords.getWorldPosition(obj);
+        const screen = this.coords.getScreenPosition(obj, vp);
 
         // Only update geometry when NOT dragging (freeze during drag to prevent wobble)
         if (!this.isDragging) {
-            this.cx = world.x;
-            this.cy = world.y;
-            this.ringRadius = this.computeRingRadius(obj, selectionMgr);
+            this.cx = screen.x;
+            this.cy = screen.y;
+            this.ringRadius = this.computeRingRadius(obj, selectionMgr, vp);
         }
 
         // Draw dashed circle
@@ -107,17 +111,18 @@ export class RotateGizmo {
 
     /**
      * Begin a rotation drag.
+     * Freezes a ViewportState snapshot at drag start (per COORD-03).
      */
     startDrag(
         handle: RotateHandle,
         screenX: number,
         screenY: number,
         target: Phaser.GameObjects.GameObject,
-        hostScene: Phaser.Scene,
+        vp: ViewportState,
     ): void {
         this.activeHandle = handle;
         this.target = target;
-        this.hostScene = hostScene;
+        this.vp = vp;
         this.lastPointerX = screenX;
         this.lastPointerY = screenY;
 
@@ -171,7 +176,7 @@ export class RotateGizmo {
     endDrag(): void {
         this.activeHandle = RotateHandle.None;
         this.target = null;
-        this.hostScene = null;
+        this.vp = null;
     }
 
     /**
@@ -200,12 +205,13 @@ export class RotateGizmo {
     private computeRingRadius(
         obj: Phaser.GameObjects.GameObject,
         selectionMgr: SelectionManager,
+        vp: ViewportState,
     ): number {
         const bounds = selectionMgr.getScreenBounds(obj);
         if (!bounds) return 40;
 
         // Distance from object origin to farthest corner of bounding rect
-        const world = this.coords.getWorldPosition(obj);
+        const screen = this.coords.getScreenPosition(obj, vp);
         const corners = [
             { x: bounds.x, y: bounds.y },
             { x: bounds.x + bounds.width, y: bounds.y },
@@ -215,8 +221,8 @@ export class RotateGizmo {
 
         let maxDist = 0;
         for (const c of corners) {
-            const dx = c.x - world.x;
-            const dy = c.y - world.y;
+            const dx = c.x - screen.x;
+            const dy = c.y - screen.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
             if (dist > maxDist) maxDist = dist;
         }
