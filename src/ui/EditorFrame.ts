@@ -19,6 +19,10 @@ export class EditorFrame {
     private savedMarginLeft: string;
     private savedMarginTop: string;
 
+    // ResizeObserver change guard
+    private lastObservedWidth = 0;
+    private lastObservedHeight = 0;
+
     readonly toolbarSlot: HTMLDivElement;
     readonly hierarchySlot: HTMLDivElement;
     readonly inspectorSlot: HTMLDivElement;
@@ -47,7 +51,7 @@ export class EditorFrame {
             position: fixed; top: 0; left: 0;
             width: 100vw; height: 100vh;
             display: grid;
-            grid-template-columns: auto 1fr auto;
+            grid-template-columns: 220px 1fr 260px;
             grid-template-rows: auto 1fr auto;
             background: #1a1a1a;
             z-index: 999;
@@ -104,7 +108,14 @@ export class EditorFrame {
             for (const entry of entries) {
                 const { width, height } = entry.contentRect;
                 if (width > 0 && height > 0) {
-                    scale.setParentSize(width, height);
+                    if (
+                        Math.abs(width - this.lastObservedWidth) >= 1 ||
+                        Math.abs(height - this.lastObservedHeight) >= 1
+                    ) {
+                        this.lastObservedWidth = width;
+                        this.lastObservedHeight = height;
+                        scale.setParentSize(width, height);
+                    }
                 }
             }
         });
@@ -137,18 +148,18 @@ export class EditorFrame {
             this.originalParent.appendChild(canvas);
         }
 
-        // Restore ScaleManager state
+        // Restore ScaleManager parent references (but NOT margins yet — see below)
         scale.parent = this.savedParent;
         scale.parentIsWindow = this.savedParentIsWindow;
         scale.autoCenter = this.savedAutoCenter;
-        canvas.style.marginLeft = this.savedMarginLeft;
-        canvas.style.marginTop = this.savedMarginTop;
 
         // Explicitly provide the correct parent dimensions.
         // We can't rely on scale.refresh() alone because when parent is
         // document.body (parentIsWindow), the body's height is content-
         // dependent and the canvas still has its editor-reduced size,
         // creating a circular dependency.
+        // NOTE: This call triggers Phaser's resize pipeline which may recalculate
+        // margins if autoCenter is active. Margins must be restored AFTER this call.
         const parentW = this.savedParentIsWindow
             ? window.innerWidth
             : this.savedParent.getBoundingClientRect().width;
@@ -156,6 +167,11 @@ export class EditorFrame {
             ? window.innerHeight
             : this.savedParent.getBoundingClientRect().height;
         scale.setParentSize(parentW, parentH);
+
+        // Restore saved margins LAST — overrides whatever autoCenter computed,
+        // restoring the exact pre-editor margin state.
+        canvas.style.marginLeft = this.savedMarginLeft;
+        canvas.style.marginTop = this.savedMarginTop;
     }
 
     private createSlot(className: string, css: string): HTMLDivElement {
