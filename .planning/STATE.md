@@ -22,7 +22,7 @@
 
 | # | Task | Date | Commit |
 |---|------|------|--------|
-| — | — | — | — |
+| 1 | Fix hierarchy panel scrollbar erratic bounce-back | 2026-02-18 | 9f2b7e9 |
 
 ## Key Decisions
 
@@ -35,10 +35,12 @@
 | ResizeObserver 1px change guard | 2026-02-18 | Initializes at 0 so first fire always passes; suppresses sub-pixel jitter |
 | Margin restore after setParentSize | 2026-02-18 | autoCenter recalculates margins during pipeline; restoring before was silently overwritten |
 | No document.contains() checks in destroy() | 2026-02-18 | Assume DOM container always exists when deactivate is called (user decision) |
+| scrollIntoView separated from highlight | 2026-02-18 | Update highlight every frame is fine; scroll only on selection change event |
+| Single DOM scroll container via wrapper height: 100% | 2026-02-18 | Wrapper fills slot exactly so slot's overflow never triggers; prevents nested scroll conflict |
 
 ## Blockers
 
 None.
 
 ---
-*Last updated: 2026-02-18 after completing Phase 1, Plan 01 (01-01-PLAN.md)*
+*Last updated: 2026-02-18 after completing Quick Task 1 (fix hierarchy panel scrollbar bounce-back)*
