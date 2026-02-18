@@ -11,9 +11,15 @@ import { ViewportState } from './ViewportState';
  * World-space:  Phaser world coordinates (what game scripts use as obj.x / obj.y).
  * Screen-space: actual pixel coordinates on the canvas after scale-to-fit + camera projection.
  *
- * The world→screen formula for a standard Phaser camera:
- *   screenX = (worldX - cam.scrollX) * cam.zoom + cam.centerX
- *   screenY = (worldY - cam.scrollY) * cam.zoom + cam.centerY
+ * The correct Phaser camera world→screen formula (derived from Phaser's preRender matrix):
+ *   screenX = (worldX - scrollX - centerX) * zoom + centerX
+ *   screenY = (worldY - scrollY - centerY) * zoom + centerY
+ *
+ * For the default camera (zoom=1, scroll=0, centerX=canvasW/2):
+ *   screenX = (worldX - 0 - canvasW/2) * 1 + canvasW/2 = worldX  (identity — correct!)
+ *
+ * The old (buggy) formula `(worldX - scrollX) * zoom + centerX` was missing `- centerX`
+ * inside the parentheses, which added half the canvas width to every world position.
  */
 export class CoordinateSystem {
     constructor(
@@ -38,20 +44,47 @@ export class CoordinateSystem {
     }
 
     /**
+     * Convert a world-space point to screen-space using the correct Phaser camera projection.
+     *
+     * Formula: screenX = (worldX - scrollX - centerX) * zoom + centerX
+     *
+     * This is derived from Phaser's camera preRender matrix:
+     *   matrix.applyITRS(originX, originY, 0, zoom, zoom)
+     *   matrix.translate(-scrollX - originX, -scrollY - originY)
+     * where originX = cam.centerX (= cam.x + cam.width/2).
+     *
+     * For default camera (zoom=1, scroll=0, centerX=canvasW/2): returns identity (worldX = screenX).
+     */
+    worldToScreen(worldX: number, worldY: number, vp: ViewportState): { x: number; y: number } {
+        return {
+            x: (worldX - vp.cameraScrollX - vp.cameraCenterX) * vp.cameraZoom + vp.cameraCenterX,
+            y: (worldY - vp.cameraScrollY - vp.cameraCenterY) * vp.cameraZoom + vp.cameraCenterY,
+        };
+    }
+
+    /**
+     * Convert a screen-space point to world-space (inverse of worldToScreen).
+     *
+     * Formula: worldX = (screenX - centerX) / zoom + scrollX + centerX
+     *
+     * For default camera (zoom=1, scroll=0, centerX=canvasW/2): returns identity (screenX = worldX).
+     */
+    screenToWorld(screenX: number, screenY: number, vp: ViewportState): { x: number; y: number } {
+        return {
+            x: (screenX - vp.cameraCenterX) / vp.cameraZoom + vp.cameraScrollX + vp.cameraCenterX,
+            y: (screenY - vp.cameraCenterY) / vp.cameraZoom + vp.cameraScrollY + vp.cameraCenterY,
+        };
+    }
+
+    /**
      * Get the screen-space pixel position of a game object.
      *
-     * Converts from Phaser world coordinates using camera projection:
-     *   screenX = (worldX - scrollX) * zoom + centerX
-     *
      * For Container children: uses getWorldTransformMatrix().tx/ty as the world-space
-     * position (already composites all parent transforms), then applies camera projection.
+     * position (already composites all parent transforms), then applies camera projection
+     * via worldToScreen().
      *
-     * For regular objects: uses obj.x/obj.y directly as world-space position.
-     *
-     * IMPORTANT: This is the fix for the bounding-box offset bug in non-default game
-     * setups. The old getWorldPosition() returned matrix.tx/ty directly, treating world
-     * coords as screen coords (only coincidentally correct in the demo where objects are
-     * placed at screen-space coordinates).
+     * For regular objects: uses obj.x/obj.y directly as world-space position, then
+     * applies camera projection via worldToScreen().
      */
     getScreenPosition(
         obj: Phaser.GameObjects.GameObject,
@@ -72,11 +105,8 @@ export class CoordinateSystem {
             worldY = (obj as any).y as number;
         }
 
-        // World → screen via camera projection
-        return {
-            x: (worldX - vp.cameraScrollX) * vp.cameraZoom + vp.cameraCenterX,
-            y: (worldY - vp.cameraScrollY) * vp.cameraZoom + vp.cameraCenterY,
-        };
+        // World → screen via correct Phaser camera projection
+        return this.worldToScreen(worldX, worldY, vp);
     }
 
     /**
@@ -95,6 +125,8 @@ export class CoordinateSystem {
      * Set a game object's position using design-space coordinates.
      * Handles objects inside Containers by converting to parent-local space.
      *
+     * Flow: design → screen → world → (optionally) parent-local
+     *
      * @param cachedInvParentMatrix Optional pre-computed inverted parent matrix.
      *   Pass the cached value from MoveGizmo.startDrag() to avoid per-frame matrix
      *   inversion during drag operations. Pass null to compute on the fly (for
@@ -110,13 +142,16 @@ export class CoordinateSystem {
         if (!('x' in obj)) return;
         const t = obj as unknown as Phaser.GameObjects.Components.Transform;
 
+        // design → screen
         const screen = this.designToScreen(dx, dy, vp);
+        // screen → world (inverse camera projection)
+        const world = this.screenToWorld(screen.x, screen.y, vp);
 
-        // If inside a Container, convert screen coords to parent-local coords
+        // If inside a Container, convert world coords to parent-local coords
         if ('parentContainer' in obj && (obj as any).parentContainer) {
             if (cachedInvParentMatrix != null) {
                 // Use pre-computed inverse (e.g. cached at drag start)
-                const local = cachedInvParentMatrix.transformPoint(screen.x, screen.y);
+                const local = cachedInvParentMatrix.transformPoint(world.x, world.y);
                 t.x = local.x;
                 t.y = local.y;
             } else {
@@ -124,13 +159,13 @@ export class CoordinateSystem {
                 const parent = (obj as any).parentContainer as Phaser.GameObjects.Container;
                 const parentMatrix = parent.getWorldTransformMatrix();
                 const inv = parentMatrix.invert();
-                const local = inv.transformPoint(screen.x, screen.y);
+                const local = inv.transformPoint(world.x, world.y);
                 t.x = local.x;
                 t.y = local.y;
             }
         } else {
-            t.x = screen.x;
-            t.y = screen.y;
+            t.x = world.x;
+            t.y = world.y;
         }
     }
 
