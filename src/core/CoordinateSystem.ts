@@ -1,16 +1,19 @@
 import Phaser from 'phaser';
+import { ViewportState } from './ViewportState';
 
 /**
- * Handles coordinate conversions between design-space and screen-space.
+ * Handles coordinate conversions between design-space, world-space, and screen-space.
+ *
+ * All public methods accept a ViewportState snapshot instead of a live Phaser.Scene.
+ * This ensures consistent coordinate math throughout a frame (no mid-frame camera drift).
  *
  * Design-space: the logical coordinate system the game is authored in (e.g. 720x1280).
- * Screen-space: the actual pixel coordinates on the canvas after scale-to-fit.
+ * World-space:  Phaser world coordinates (what game scripts use as obj.x / obj.y).
+ * Screen-space: actual pixel coordinates on the canvas after scale-to-fit + camera projection.
  *
- * The conversion uses the same math as a typical Phaser Scale.FIT setup:
- *   scaleFactor = min(screenW / designW, screenH / designH)
- *   offsetX = (screenW - designW * sf) / 2
- *   offsetY = (screenH - designH * sf) / 2
- *   screenX = offsetX + designX * sf
+ * The world→screen formula for a standard Phaser camera:
+ *   screenX = (worldX - cam.scrollX) * cam.zoom + cam.centerX
+ *   screenY = (worldY - cam.scrollY) * cam.zoom + cam.centerY
  */
 export class CoordinateSystem {
     constructor(
@@ -18,94 +21,181 @@ export class CoordinateSystem {
         public designHeight: number,
     ) {}
 
-    /** Current scale factor derived from camera dimensions. */
-    getScaleFactor(scene: Phaser.Scene): number {
-        const { width, height } = scene.cameras.main;
-        return Math.min(width / this.designWidth, height / this.designHeight);
-    }
-
-    /** Offset from canvas edge to design area origin. */
-    getOffset(scene: Phaser.Scene): { x: number; y: number } {
-        const { width, height } = scene.cameras.main;
-        const sf = this.getScaleFactor(scene);
-        return {
-            x: (width - this.designWidth * sf) / 2,
-            y: (height - this.designHeight * sf) / 2,
-        };
-    }
-
     /** Convert a design-space point to screen-space. */
-    designToScreen(dx: number, dy: number, scene: Phaser.Scene): { x: number; y: number } {
-        const sf = this.getScaleFactor(scene);
-        const offset = this.getOffset(scene);
+    designToScreen(dx: number, dy: number, vp: ViewportState): { x: number; y: number } {
         return {
-            x: offset.x + dx * sf,
-            y: offset.y + dy * sf,
+            x: vp.offsetX + dx * vp.scaleFactor,
+            y: vp.offsetY + dy * vp.scaleFactor,
         };
     }
 
     /** Convert a screen-space point to design-space. */
-    screenToDesign(sx: number, sy: number, scene: Phaser.Scene): { x: number; y: number } {
-        const sf = this.getScaleFactor(scene);
-        const offset = this.getOffset(scene);
+    screenToDesign(sx: number, sy: number, vp: ViewportState): { x: number; y: number } {
         return {
-            x: (sx - offset.x) / sf,
-            y: (sy - offset.y) / sf,
+            x: (sx - vp.offsetX) / vp.scaleFactor,
+            y: (sy - vp.offsetY) / vp.scaleFactor,
         };
     }
 
     /**
-     * Get the world (screen-space) position of a game object,
-     * accounting for parent Container transforms.
+     * Get the screen-space pixel position of a game object.
+     *
+     * Converts from Phaser world coordinates using camera projection:
+     *   screenX = (worldX - scrollX) * zoom + centerX
+     *
+     * For Container children: uses getWorldTransformMatrix().tx/ty as the world-space
+     * position (already composites all parent transforms), then applies camera projection.
+     *
+     * For regular objects: uses obj.x/obj.y directly as world-space position.
+     *
+     * IMPORTANT: This is the fix for the bounding-box offset bug in non-default game
+     * setups. The old getWorldPosition() returned matrix.tx/ty directly, treating world
+     * coords as screen coords (only coincidentally correct in the demo where objects are
+     * placed at screen-space coordinates).
      */
-    getWorldPosition(obj: Phaser.GameObjects.GameObject): { x: number; y: number } {
+    getScreenPosition(
+        obj: Phaser.GameObjects.GameObject,
+        vp: ViewportState,
+    ): { x: number; y: number } {
         if (!('x' in obj)) return { x: 0, y: 0 };
-        const t = obj as unknown as Phaser.GameObjects.Components.Transform;
 
-        // If the object is inside a Container, use the transform matrix
+        let worldX: number;
+        let worldY: number;
+
         if ('parentContainer' in obj && (obj as any).parentContainer) {
-            const matrix = (t as any).getWorldTransformMatrix() as Phaser.GameObjects.Components.TransformMatrix;
-            return { x: matrix.tx, y: matrix.ty };
+            // Container children: world matrix composes all parent transforms
+            const matrix = (obj as any).getWorldTransformMatrix() as Phaser.GameObjects.Components.TransformMatrix;
+            worldX = matrix.tx;
+            worldY = matrix.ty;
+        } else {
+            worldX = (obj as any).x as number;
+            worldY = (obj as any).y as number;
         }
 
-        return { x: t.x, y: t.y };
+        // World → screen via camera projection
+        return {
+            x: (worldX - vp.cameraScrollX) * vp.cameraZoom + vp.cameraCenterX,
+            y: (worldY - vp.cameraScrollY) * vp.cameraZoom + vp.cameraCenterY,
+        };
     }
 
     /**
      * Get the design-space position of a game object.
-     * Converts from its world (screen) position back to design coordinates.
+     * Converts from its world position to screen-space, then to design-space.
      */
-    getDesignPosition(obj: Phaser.GameObjects.GameObject, scene: Phaser.Scene): { x: number; y: number } {
-        const world = this.getWorldPosition(obj);
-        return this.screenToDesign(world.x, world.y, scene);
+    getDesignPosition(
+        obj: Phaser.GameObjects.GameObject,
+        vp: ViewportState,
+    ): { x: number; y: number } {
+        const screen = this.getScreenPosition(obj, vp);
+        return this.screenToDesign(screen.x, screen.y, vp);
     }
 
     /**
      * Set a game object's position using design-space coordinates.
-     * Handles objects inside Containers by converting to local space.
+     * Handles objects inside Containers by converting to parent-local space.
+     *
+     * @param cachedInvParentMatrix Optional pre-computed inverted parent matrix.
+     *   Pass the cached value from MoveGizmo.startDrag() to avoid per-frame matrix
+     *   inversion during drag operations. Pass null to compute on the fly (for
+     *   one-shot calls from InspectorPanel).
      */
     setDesignPosition(
         obj: Phaser.GameObjects.GameObject,
         dx: number,
         dy: number,
-        scene: Phaser.Scene,
+        vp: ViewportState,
+        cachedInvParentMatrix?: Phaser.GameObjects.Components.TransformMatrix | null,
     ): void {
         if (!('x' in obj)) return;
         const t = obj as unknown as Phaser.GameObjects.Components.Transform;
 
-        const screen = this.designToScreen(dx, dy, scene);
+        const screen = this.designToScreen(dx, dy, vp);
 
         // If inside a Container, convert screen coords to parent-local coords
         if ('parentContainer' in obj && (obj as any).parentContainer) {
-            const parent = (obj as any).parentContainer as Phaser.GameObjects.Container;
-            const parentMatrix = parent.getWorldTransformMatrix();
-            const inv = parentMatrix.invert();
-            const local = inv.transformPoint(screen.x, screen.y);
-            t.x = local.x;
-            t.y = local.y;
+            if (cachedInvParentMatrix != null) {
+                // Use pre-computed inverse (e.g. cached at drag start)
+                const local = cachedInvParentMatrix.transformPoint(screen.x, screen.y);
+                t.x = local.x;
+                t.y = local.y;
+            } else {
+                // Compute on the fly (one-shot from InspectorPanel etc.)
+                const parent = (obj as any).parentContainer as Phaser.GameObjects.Container;
+                const parentMatrix = parent.getWorldTransformMatrix();
+                const inv = parentMatrix.invert();
+                const local = inv.transformPoint(screen.x, screen.y);
+                t.x = local.x;
+                t.y = local.y;
+            }
         } else {
             t.x = screen.x;
             t.y = screen.y;
         }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Hit-area transform helpers (centralized from 3-file duplication: COORD-04)
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Returns a closure that maps a hit-area local point to screen-space,
+     * applying displayOrigin adjustment and the object's world transform matrix.
+     *
+     * Hit area coordinates are in frame-space (0,0 = texture top-left for sprites).
+     * The world matrix origin is at the object's displayOrigin, so we subtract
+     * displayOriginX/Y to shift from frame-space to local-space before applying.
+     * Containers: displayOrigin does not apply to hit-area vertices, so it is skipped.
+     *
+     * NOTE: These helpers use the world matrix directly (no ViewportState needed)
+     * because hit-area rendering happens in Phaser's shared GL context where the
+     * overlay scene uses the same camera transform as the game scene. In that
+     * render context, matrix.tx/ty already project correctly to screen pixels.
+     * This is why hit-area rendering was always correct even when getWorldPosition()
+     * was wrong — the matrix approach is inherently camera-aware for rendering.
+     *
+     * Extracted from:
+     * - EditorScene.ts drawHitArea() lines 283-290
+     * - HitAreaGizmo.ts getTransformHelpers() lines 265-287
+     * - SelectionManager.ts getPolygonShapeBounds() lines 140-148
+     */
+    getHitAreaToScreen(
+        obj: Phaser.GameObjects.GameObject,
+    ): (lx: number, ly: number) => { x: number; y: number } {
+        const matrix = (obj as any).getWorldTransformMatrix() as Phaser.GameObjects.Components.TransformMatrix;
+        const isContainer = obj instanceof Phaser.GameObjects.Container;
+        const doX = isContainer ? 0 : ((obj as any).displayOriginX ?? 0);
+        const doY = isContainer ? 0 : ((obj as any).displayOriginY ?? 0);
+
+        return (lx: number, ly: number) => {
+            const adjX = lx - doX;
+            const adjY = ly - doY;
+            return {
+                x: matrix.a * adjX + matrix.c * adjY + matrix.tx,
+                y: matrix.b * adjX + matrix.d * adjY + matrix.ty,
+            };
+        };
+    }
+
+    /**
+     * Returns a closure that converts a screen-space delta to a hit-area
+     * local-space delta, using the inverse of the object's world transform matrix.
+     *
+     * Used for hit-area drag operations where pointer movement (screen pixels)
+     * must map to hit-area coordinate changes (local frame space).
+     *
+     * Extracted from:
+     * - HitAreaGizmo.ts getTransformHelpers() lines 271-284
+     */
+    getHitAreaScreenDeltaToLocal(
+        obj: Phaser.GameObjects.GameObject,
+    ): (dsx: number, dsy: number) => { dx: number; dy: number } {
+        const matrix = (obj as any).getWorldTransformMatrix() as Phaser.GameObjects.Components.TransformMatrix;
+        const det = matrix.a * matrix.d - matrix.b * matrix.c;
+
+        return (dsx: number, dsy: number) => ({
+            dx: (matrix.d * dsx - matrix.c * dsy) / det,
+            dy: (-matrix.b * dsx + matrix.a * dsy) / det,
+        });
     }
 }
