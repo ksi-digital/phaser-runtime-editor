@@ -90,7 +90,9 @@ export class HierarchyPanel {
         this.wrapper.className = 'phaser-editor-hierarchy';
         this.wrapper.style.cssText = `
             width: 220px;
+            height: 100%;
             overflow-y: auto;
+            overflow-x: hidden;
             background: rgba(30, 30, 30, 0.95);
             color: #ccc;
             font-family: monospace;
@@ -240,6 +242,7 @@ export class HierarchyPanel {
         }
 
         this.updateHighlight();
+        this.scrollToSelected();
     }
 
     private buildNode(obj: Phaser.GameObjects.GameObject, parentUl: HTMLElement): void {
@@ -367,14 +370,12 @@ export class HierarchyPanel {
                 // Exact match: editing hit area and this is the hit area row
                 this.selectedRow = row;
                 row.classList.add('pe-ha-selected');
-                row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
                 return;
             }
             if (!wantHitArea && !isHaRow) {
                 // Exact match: not editing hit area and this is the object row
                 this.selectedRow = row;
                 row.classList.add('pe-selected');
-                row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
                 return;
             }
             // Keep as fallback in case we don't find an exact match
@@ -385,12 +386,23 @@ export class HierarchyPanel {
         if (fallback) {
             this.selectedRow = fallback;
             fallback.classList.add(wantHitArea ? 'pe-ha-selected' : 'pe-selected');
-            fallback.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }
+
+    /**
+     * Scroll the currently selected row into view once.
+     * Uses 'instant' behavior to avoid lingering scroll animations that
+     * could interfere with manual user scrolling.
+     */
+    private scrollToSelected(): void {
+        if (this.selectedRow) {
+            this.selectedRow.scrollIntoView({ block: 'nearest', behavior: 'instant' });
         }
     }
 
     private onSelectionChanged(): void {
         this.updateHighlight();
+        this.scrollToSelected();
     }
 
 }
