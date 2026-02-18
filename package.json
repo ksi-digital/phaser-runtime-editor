@@ -19,11 +19,11 @@
     ],
     "repository": {
         "type": "git",
-        "url": "https://github.com/gamotions/phaser-runtime-editor.git"
+        "url": "https://github.com/ksi-digital/phaser-runtime-editor.git"
     },
-    "homepage": "https://github.com/gamotions/phaser-runtime-editor#readme",
+    "homepage": "https://github.com/ksi-digital/phaser-runtime-editor#readme",
     "bugs": {
-        "url": "https://github.com/gamotions/phaser-runtime-editor/issues"
+        "url": "https://github.com/ksi-digital/phaser-runtime-editor/issues"
     },
     "main": "dist/index.cjs",
     "module": "dist/index.js",

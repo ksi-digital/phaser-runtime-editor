@@ -92,7 +92,7 @@ export class GizmoManager {
 
         // Hit area edit mode takes priority over tool gizmos
         if (this.state.editingHitArea && (selected as any).input?.hitArea) {
-            this.hitAreaGizmo.draw(gfx, selected, this.selectionMgr);
+            this.hitAreaGizmo.draw(gfx, selected, this.selectionMgr, vp);
             this.updateDragLabel();
             return;
         }

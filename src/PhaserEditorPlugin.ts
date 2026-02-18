@@ -28,7 +28,18 @@ function onDomKeyDown(e: KeyboardEvent): void {
     if (!activePluginInstance) return;
     if (e.key === activePluginInstance.hotkey) {
         e.preventDefault();
-        activePluginInstance.toggle();
+        // If already active, toggle on the current instance (deactivate).
+        // Otherwise, find the topmost active game scene and toggle on its plugin.
+        if (activePluginInstance.isActive) {
+            activePluginInstance.toggle();
+        } else {
+            const best = activePluginInstance.findTopmostPluginInstance();
+            if (best) {
+                best.toggle();
+            } else {
+                activePluginInstance.toggle();
+            }
+        }
     }
 }
 
@@ -81,10 +92,14 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
         // Read plugin config from the game config's plugin registration entry.
         // The `data` field in `plugins.scene[{...data}]` is NOT placed on
         // `systems.settings.data` — it stays on the raw config object.
+        //
+        // NOTE: Phaser passes the `mapping` value (not `key`) as the pluginKey
+        // constructor argument. We must match against both `entry.key` and
+        // `entry.mapping` to find the correct config entry.
         const pluginConfigs = (this.game.config as any)?.installScenePlugins;
         if (Array.isArray(pluginConfigs)) {
             for (const entry of pluginConfigs) {
-                if (entry.key === this._pluginKey && entry.data) {
+                if ((entry.key === this._pluginKey || entry.mapping === this._pluginKey) && entry.data) {
                     const d = entry.data as EditorPluginConfig;
                     if (d.designWidth != null) this.config.designWidth = d.designWidth;
                     if (d.designHeight != null) this.config.designHeight = d.designHeight;
@@ -210,6 +225,29 @@ export class PhaserEditorPlugin extends Phaser.Plugins.ScenePlugin {
 
     get isActive(): boolean {
         return this.editorActive;
+    }
+
+    /**
+     * Find the plugin instance attached to the topmost active game scene.
+     * Used by the F2 handler to ensure the editor uses the correct host scene
+     * (not just whichever scene happened to boot last).
+     */
+    findTopmostPluginInstance(): PhaserEditorPlugin | null {
+        const game = this.systems?.game;
+        if (!game) return null;
+
+        // getScenes(true) returns active scenes ordered by scene list position
+        const activeScenes = game.scene.getScenes(true);
+        for (let i = activeScenes.length - 1; i >= 0; i--) {
+            const scene = activeScenes[i];
+            if (scene.scene.key === EDITOR_SCENE_KEY) continue;
+            // Access the plugin instance via the mapping on scene.sys
+            const plugin = (scene as any)[this._pluginKey] as PhaserEditorPlugin | undefined;
+            if (plugin instanceof PhaserEditorPlugin) {
+                return plugin;
+            }
+        }
+        return null;
     }
 
     private snapshotProperties(): void {

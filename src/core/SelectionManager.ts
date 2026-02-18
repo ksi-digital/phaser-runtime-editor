@@ -110,7 +110,7 @@ export class SelectionManager {
         // negative vertices. Compute AABB by transforming geometry through
         // the world matrix with displayOrigin offset (same math as hit area overlay).
         if (obj instanceof Phaser.GameObjects.Polygon) {
-            return this.getPolygonShapeBounds(obj);
+            return this.getPolygonShapeBounds(obj, vp);
         }
 
         // Regular object: use getBounds if available, then project to screen-space
@@ -146,11 +146,11 @@ export class SelectionManager {
      * This works correctly for the default camera. For non-default cameras,
      * this is a known limitation (separate from the two reported bugs).
      */
-    private getPolygonShapeBounds(poly: Phaser.GameObjects.Polygon): Phaser.Geom.Rectangle | null {
+    private getPolygonShapeBounds(poly: Phaser.GameObjects.Polygon, vp: ViewportState): Phaser.Geom.Rectangle | null {
         const geom = (poly as any).geom as Phaser.Geom.Polygon;
         if (!geom?.points || geom.points.length < 2) return null;
 
-        const toScreen = this.coords.getHitAreaToScreen(poly);
+        const toScreen = this.coords.getHitAreaToScreen(poly, vp);
 
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 

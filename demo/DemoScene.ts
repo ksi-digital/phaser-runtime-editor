@@ -83,13 +83,23 @@ export class DemoScene extends Phaser.Scene {
         sky.setDepth(0);
         sky.setName('sky_background');
 
-        // --- Ground (depth 1) ---
+        // --- Ground (depth 1) — extends full canvas width for edge-to-edge coverage ---
         const groundPos = toScreen(DESIGN_WIDTH / 2, 1200);
-        const ground = this.add.image(groundPos.x, groundPos.y, 'ground');
-        ground.setDisplaySize(DESIGN_WIDTH * sf, 160 * sf);
+        const ground = this.add.image(width / 2, groundPos.y, 'ground');
+        ground.setDisplaySize(width, 160 * sf);
         ground.setDepth(1);
         ground.setName('ground');
         ground.setInteractive(new Phaser.Geom.Rectangle(0, 0, 64, 16), Phaser.Geom.Rectangle.Contains);
+
+        // --- Ground fill below (depth 1) — covers any gap below the ground to canvas bottom ---
+        const groundBottomY = groundPos.y + 80 * sf;
+        const fillHeight = height - groundBottomY;
+        if (fillHeight > 0) {
+            const groundFill = this.add.image(width / 2, groundBottomY + fillHeight / 2, 'ground');
+            groundFill.setDisplaySize(width, fillHeight);
+            groundFill.setDepth(1);
+            groundFill.setName('ground_fill');
+        }
 
         // --- Platforms (depth 3) ---
         const platformData = [

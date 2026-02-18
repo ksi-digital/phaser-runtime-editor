@@ -157,7 +157,49 @@ export class EditorScene extends Phaser.Scene {
         // Listen for scene shutdown (when game.scene.stop is called)
         this.events.on('shutdown', this.onShutdown, this);
 
-        console.log(`[EditorScene] Created — design: ${this.designWidth}x${this.designHeight}, host: ${this.hostSceneKey}, objects: ${this.selectionMgr.getSelectableObjects().length}`);
+        // --- DEBUG: Dump viewport + camera state on creation ---
+        const hostScene = this.getHostScene();
+        if (hostScene) {
+            const hostCam = hostScene.cameras.main;
+            const edCam = this.cameras.main;
+            console.log(`[EditorScene] Created — design: ${this.designWidth}x${this.designHeight}, host: ${this.hostSceneKey}, objects: ${this.selectionMgr.getSelectableObjects().length}`);
+            console.log('[EditorScene] HOST camera:', JSON.stringify({
+                x: hostCam.x, y: hostCam.y,
+                width: hostCam.width, height: hostCam.height,
+                scrollX: hostCam.scrollX, scrollY: hostCam.scrollY,
+                zoom: hostCam.zoom, zoomX: hostCam.zoomX, zoomY: hostCam.zoomY,
+                centerX: hostCam.centerX, centerY: hostCam.centerY,
+                originX: (hostCam as any).originX, originY: (hostCam as any).originY,
+            }));
+            console.log('[EditorScene] EDITOR camera:', JSON.stringify({
+                x: edCam.x, y: edCam.y,
+                width: edCam.width, height: edCam.height,
+                scrollX: edCam.scrollX, scrollY: edCam.scrollY,
+                zoom: edCam.zoom,
+                centerX: edCam.centerX, centerY: edCam.centerY,
+            }));
+            const vp = captureViewport(this.designWidth, this.designHeight, hostScene, this);
+            console.log('[EditorScene] ViewportState:', JSON.stringify(vp));
+
+            // Test: pick first object and show getBounds + worldToScreen
+            const objs = this.selectionMgr.getSelectableObjects();
+            for (const obj of objs.slice(0, 3)) {
+                const name = SelectionManager.getObjectName(obj);
+                const worldPos = { x: (obj as any).x, y: (obj as any).y };
+                const screenPos = this.coordSystem.worldToScreen(worldPos.x, worldPos.y, vp);
+                let boundsInfo = 'N/A';
+                if ('getBounds' in obj && typeof (obj as any).getBounds === 'function') {
+                    try {
+                        const b = (obj as any).getBounds();
+                        const bScreen = this.coordSystem.worldToScreen(b.x, b.y, vp);
+                        boundsInfo = `world(${b.x.toFixed(1)},${b.y.toFixed(1)},${b.width.toFixed(1)},${b.height.toFixed(1)}) -> screen(${bScreen.x.toFixed(1)},${bScreen.y.toFixed(1)})`;
+                    } catch { boundsInfo = 'ERROR'; }
+                }
+                console.log(`[EditorScene] Object "${name}": world(${worldPos.x.toFixed(1)},${worldPos.y.toFixed(1)}) -> screen(${screenPos.x.toFixed(1)},${screenPos.y.toFixed(1)}), bounds: ${boundsInfo}`);
+            }
+        } else {
+            console.log(`[EditorScene] Created — design: ${this.designWidth}x${this.designHeight}, host: ${this.hostSceneKey}, objects: ${this.selectionMgr.getSelectableObjects().length}`);
+        }
     }
 
     /**
@@ -183,7 +225,7 @@ export class EditorScene extends Phaser.Scene {
         // since HitAreaGizmo draws its own enhanced version with handles)
         const sel = this.editorState.selected;
         if (sel && (sel as any).input?.hitArea && !this.editorState.editingHitArea) {
-            this.drawHitArea(this.gfx, sel);
+            this.drawHitArea(this.gfx, sel, vp ?? undefined);
         }
 
         this.gizmoMgr.draw(this.gfx, vp);
@@ -275,12 +317,12 @@ export class EditorScene extends Phaser.Scene {
      * to width*0.5 regardless of actual hit area layout. So for Containers we
      * skip the displayOrigin subtraction — handled automatically by getHitAreaToScreen().
      */
-    private drawHitArea(gfx: Phaser.GameObjects.Graphics, obj: Phaser.GameObjects.GameObject): void {
+    private drawHitArea(gfx: Phaser.GameObjects.Graphics, obj: Phaser.GameObjects.GameObject, vp?: ViewportState): void {
         const input = (obj as any).input;
         if (!input?.hitArea) return;
 
         const hitArea = input.hitArea;
-        const toScreen = this.coordSystem.getHitAreaToScreen(obj);
+        const toScreen = this.coordSystem.getHitAreaToScreen(obj, vp);
 
         const HIT_FILL_COLOR = 0xffff00;
         const HIT_FILL_ALPHA = 0.15;

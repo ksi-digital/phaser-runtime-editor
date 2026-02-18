@@ -182,12 +182,10 @@ export class CoordinateSystem {
      * displayOriginX/Y to shift from frame-space to local-space before applying.
      * Containers: displayOrigin does not apply to hit-area vertices, so it is skipped.
      *
-     * NOTE: These helpers use the world matrix directly (no ViewportState needed)
-     * because hit-area rendering happens in Phaser's shared GL context where the
-     * overlay scene uses the same camera transform as the game scene. In that
-     * render context, matrix.tx/ty already project correctly to screen pixels.
-     * This is why hit-area rendering was always correct even when getWorldPosition()
-     * was wrong — the matrix approach is inherently camera-aware for rendering.
+     * When a ViewportState is provided, the world-space result is projected
+     * through the camera via worldToScreen(). This is required when the host
+     * scene has a non-default camera (zoom != 1 or scroll != 0), because
+     * the editor overlay scene draws through its own default camera.
      *
      * Extracted from:
      * - EditorScene.ts drawHitArea() lines 283-290
@@ -196,6 +194,7 @@ export class CoordinateSystem {
      */
     getHitAreaToScreen(
         obj: Phaser.GameObjects.GameObject,
+        vp?: ViewportState,
     ): (lx: number, ly: number) => { x: number; y: number } {
         const matrix = (obj as any).getWorldTransformMatrix() as Phaser.GameObjects.Components.TransformMatrix;
         const isContainer = obj instanceof Phaser.GameObjects.Container;
@@ -205,10 +204,14 @@ export class CoordinateSystem {
         return (lx: number, ly: number) => {
             const adjX = lx - doX;
             const adjY = ly - doY;
-            return {
-                x: matrix.a * adjX + matrix.c * adjY + matrix.tx,
-                y: matrix.b * adjX + matrix.d * adjY + matrix.ty,
-            };
+            // Matrix gives world-space coordinates
+            const worldX = matrix.a * adjX + matrix.c * adjY + matrix.tx;
+            const worldY = matrix.b * adjX + matrix.d * adjY + matrix.ty;
+            // Apply camera projection if ViewportState is provided
+            if (vp) {
+                return this.worldToScreen(worldX, worldY, vp);
+            }
+            return { x: worldX, y: worldY };
         };
     }
 
@@ -224,13 +227,22 @@ export class CoordinateSystem {
      */
     getHitAreaScreenDeltaToLocal(
         obj: Phaser.GameObjects.GameObject,
+        vp?: ViewportState,
     ): (dsx: number, dsy: number) => { dx: number; dy: number } {
         const matrix = (obj as any).getWorldTransformMatrix() as Phaser.GameObjects.Components.TransformMatrix;
         const det = matrix.a * matrix.d - matrix.b * matrix.c;
+        // When a camera zoom is active, screen-space deltas must be divided
+        // by zoom to convert to world-space deltas before inverting through
+        // the object's world matrix.
+        const zoom = vp?.cameraZoom ?? 1;
 
-        return (dsx: number, dsy: number) => ({
-            dx: (matrix.d * dsx - matrix.c * dsy) / det,
-            dy: (-matrix.b * dsx + matrix.a * dsy) / det,
-        });
+        return (dsx: number, dsy: number) => {
+            const wdx = dsx / zoom;
+            const wdy = dsy / zoom;
+            return {
+                dx: (matrix.d * wdx - matrix.c * wdy) / det,
+                dy: (-matrix.b * wdx + matrix.a * wdy) / det,
+            };
+        };
     }
 }
