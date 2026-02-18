@@ -6,14 +6,14 @@
 
 ## Current Phase
 
-**Phase 2: Coordinate Refactor** — In Progress (Plan 1/2 complete)
+**Phase 2: Coordinate Refactor** — Complete (Plan 2/2 complete)
 
 ## Phase Status
 
 | Phase | Status | Started | Completed |
 |-------|--------|---------|-----------|
 | 1. Viewport Stability | Complete | 2026-02-18 | 2026-02-18 |
-| 2. Coordinate Refactor | In Progress | 2026-02-18 | — |
+| 2. Coordinate Refactor | Complete | 2026-02-18 | 2026-02-18 |
 | 3. Object Identification | Pending | — | — |
 | 4. Debugging & UX | Pending | — | — |
 | 5. Robustness | Pending | — | — |
@@ -40,10 +40,13 @@
 | cameraCenterX/Y included in ViewportState | 2026-02-18 | Full Phaser camera projection formula requires screen-space center point |
 | editorScene for canvas dims in captureViewport() | 2026-02-18 | Host scene camera may be scrolled/zoomed; editor overlay always has canvas pixel dims |
 | Hit-area helpers use world matrix only (no ViewportState) | 2026-02-18 | Phaser shared GL context makes matrix.tx/ty screen-correct for rendering |
+| GizmoManager stores editorScene field | 2026-02-18 | Required to call captureViewport() at pointer-down time for drag-start snapshot |
+| ScaleGizmo stores vp but doesn't use in updateDrag | 2026-02-18 | Scale drag operates purely in screen-space (distance ratios); vp stored for API consistency |
+| SelectionManager.drawSelection() has no vp param | 2026-02-18 | Selection rendering uses world matrix (rendering path), not camera projection path |
 
 ## Blockers
 
 None.
 
 ---
-*Last updated: 2026-02-18 after completing Phase 2 Plan 01 (ViewportState interface + CoordinateSystem refactor)*
+*Last updated: 2026-02-18 after completing Phase 2 Plan 02 (ViewportState consumer migration + gizmo threading)*
