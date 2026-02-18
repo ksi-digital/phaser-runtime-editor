@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { EditorState } from './EditorState';
 import { CoordinateSystem } from './CoordinateSystem';
+import type { ViewportState } from './ViewportState';
 
 const SELECTION_COLOR = 0x4488ff;
 const SELECTION_ALPHA = 0.9;
@@ -121,8 +122,8 @@ export class SelectionManager {
     }
 
     /**
-     * Compute screen-space AABB for a Polygon Shape by transforming its
-     * geometry vertices through the world matrix with displayOrigin offset.
+     * Compute screen-space AABB for a Polygon Shape using the centralized
+     * CoordinateSystem.getHitAreaToScreen() helper.
      * Phaser's built-in getBounds() returns wrong results when polygon
      * vertices have negative coordinates.
      */
@@ -130,22 +131,16 @@ export class SelectionManager {
         const geom = (poly as any).geom as Phaser.Geom.Polygon;
         if (!geom?.points || geom.points.length < 2) return null;
 
-        const matrix: Phaser.GameObjects.Components.TransformMatrix =
-            (poly as any).getWorldTransformMatrix();
-        const dx = (poly as any).displayOriginX ?? 0;
-        const dy = (poly as any).displayOriginY ?? 0;
+        const toScreen = this.coords.getHitAreaToScreen(poly);
 
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
         for (const p of geom.points) {
-            const adjX = p.x - dx;
-            const adjY = p.y - dy;
-            const sx = matrix.a * adjX + matrix.c * adjY + matrix.tx;
-            const sy = matrix.b * adjX + matrix.d * adjY + matrix.ty;
-            minX = Math.min(minX, sx);
-            minY = Math.min(minY, sy);
-            maxX = Math.max(maxX, sx);
-            maxY = Math.max(maxY, sy);
+            const s = toScreen(p.x, p.y);
+            minX = Math.min(minX, s.x);
+            minY = Math.min(minY, s.y);
+            maxX = Math.max(maxX, s.x);
+            maxY = Math.max(maxY, s.y);
         }
 
         if (!isFinite(minX)) return null;
@@ -196,9 +191,19 @@ export class SelectionManager {
             }
         }
 
-        // Fallback: use world position + small default size
-        const world = this.coords.getWorldPosition(child);
-        return new Phaser.Geom.Rectangle(world.x - 8, world.y - 8, 16, 16);
+        // Fallback: use world transform matrix tx/ty + small default size
+        // (getWorldTransformMatrix().tx/ty gives the screen-space position for
+        // Container children in Phaser's shared GL context)
+        if ('getWorldTransformMatrix' in child && typeof (child as any).getWorldTransformMatrix === 'function') {
+            try {
+                const matrix = (child as any).getWorldTransformMatrix() as Phaser.GameObjects.Components.TransformMatrix;
+                return new Phaser.Geom.Rectangle(matrix.tx - 8, matrix.ty - 8, 16, 16);
+            } catch {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     /**

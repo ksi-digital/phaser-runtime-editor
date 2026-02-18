@@ -2,6 +2,7 @@ import { Pane, FolderApi } from 'tweakpane';
 import Phaser from 'phaser';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { SelectionManager } from '../core/SelectionManager';
+import type { ViewportState } from '../core/ViewportState';
 
 /**
  * Property inspector panel using Tweakpane v4.
@@ -46,8 +47,8 @@ export class InspectorPanel {
     /** The currently bound game object. */
     private target: Phaser.GameObjects.GameObject | null = null;
 
-    /** The host scene for coordinate conversions. */
-    private hostScene: Phaser.Scene | null = null;
+    /** The viewport state for coordinate conversions. */
+    private vp: ViewportState | null = null;
 
     /** Whether we're currently applying a pane change to the game object (prevents feedback loop). */
     private applying = false;
@@ -60,10 +61,10 @@ export class InspectorPanel {
     /**
      * Build the panel for a newly selected object.
      */
-    bind(obj: Phaser.GameObjects.GameObject, hostScene: Phaser.Scene): void {
+    bind(obj: Phaser.GameObjects.GameObject, vp: ViewportState): void {
         this.dispose();
         this.target = obj;
-        this.hostScene = hostScene;
+        this.vp = vp;
 
         // Read initial values from the object
         this.syncFromObject();
@@ -95,19 +96,18 @@ export class InspectorPanel {
         this.pane = new Pane({ container: wrapper });
 
         // --- Transform folder ---
+        // No min/max on x, y, scale — prevents values getting stuck at slider limits.
+        // Tweakpane renders these as draggable number inputs (click-drag or type to edit).
         const transform = this.pane.addFolder({ title: 'Transform', expanded: true });
-        const xPad = this.coords.designWidth * 0.25;
-        const yPad = this.coords.designHeight * 0.25;
-        transform.addBinding(this.params, 'x', { min: -xPad, max: this.coords.designWidth + xPad, step: 1, label: 'x' })
+        transform.addBinding(this.params, 'x', { step: 1, label: 'x' })
             .on('change', () => this.applyTransform());
-        transform.addBinding(this.params, 'y', { min: -yPad, max: this.coords.designHeight + yPad, step: 1, label: 'y' })
+        transform.addBinding(this.params, 'y', { step: 1, label: 'y' })
             .on('change', () => this.applyTransform());
-        transform.addBinding(this.params, 'rotation', { min: -180, max: 180, step: 1, label: 'rotation' })
+        transform.addBinding(this.params, 'rotation', { step: 1, label: 'rotation' })
             .on('change', () => this.applyRotation());
-        const scaleMax = Math.max(10, Math.abs(this.params.scaleX) * 2, Math.abs(this.params.scaleY) * 2);
-        transform.addBinding(this.params, 'scaleX', { min: -scaleMax, max: scaleMax, step: 0.01, label: 'scaleX' })
+        transform.addBinding(this.params, 'scaleX', { step: 0.01, label: 'scaleX' })
             .on('change', () => this.applyScale());
-        transform.addBinding(this.params, 'scaleY', { min: -scaleMax, max: scaleMax, step: 0.01, label: 'scaleY' })
+        transform.addBinding(this.params, 'scaleY', { step: 0.01, label: 'scaleY' })
             .on('change', () => this.applyScale());
 
         // --- Origin folder ---
@@ -125,7 +125,8 @@ export class InspectorPanel {
             .on('change', () => this.applyDisplay());
         display.addBinding(this.params, 'visible', { label: 'visible' })
             .on('change', () => this.applyDisplay());
-        display.addBinding(this.params, 'depth', { readonly: true, label: 'depth' });
+        display.addBinding(this.params, 'depth', { step: 1, label: 'depth' })
+            .on('change', () => this.applyDisplay());
 
         // --- Info folder ---
         const info = this.pane.addFolder({ title: 'Info', expanded: true });
@@ -178,14 +179,18 @@ export class InspectorPanel {
         if (wrapper) wrapper.remove();
 
         this.target = null;
-        this.hostScene = null;
+        this.vp = null;
     }
 
     /**
      * Sync panel values from the game object. Called each frame from EditorScene.update()
      * to reflect gizmo-driven changes in the panel.
+     * If vp is provided, updates the stored ViewportState for coordinate conversions.
      */
-    refresh(): void {
+    refresh(vp?: ViewportState): void {
+        if (vp) {
+            this.vp = vp;
+        }
         if (!this.target || !this.pane || this.applying) return;
         this.syncFromObject();
         this.pane.refresh();
@@ -195,10 +200,10 @@ export class InspectorPanel {
 
     private syncFromObject(): void {
         const obj = this.target;
-        if (!obj || !this.hostScene) return;
+        if (!obj || !this.vp) return;
 
         const t = obj as unknown as Phaser.GameObjects.Components.Transform;
-        const designPos = this.coords.getDesignPosition(obj, this.hostScene);
+        const designPos = this.coords.getDesignPosition(obj, this.vp);
 
         this.params.x = Math.round(designPos.x);
         this.params.y = Math.round(designPos.y);
@@ -249,9 +254,9 @@ export class InspectorPanel {
     // ---- Apply: params → object ----
 
     private applyTransform(): void {
-        if (!this.target || !this.hostScene) return;
+        if (!this.target || !this.vp) return;
         this.applying = true;
-        this.coords.setDesignPosition(this.target, this.params.x, this.params.y, this.hostScene);
+        this.coords.setDesignPosition(this.target, this.params.x, this.params.y, this.vp);
         this.applying = false;
     }
 
@@ -286,6 +291,7 @@ export class InspectorPanel {
         this.applying = true;
         if ('alpha' in this.target) (this.target as any).alpha = this.params.alpha;
         if ('visible' in this.target) (this.target as any).visible = this.params.visible;
+        if ('depth' in this.target) (this.target as any).depth = this.params.depth;
         this.applying = false;
     }
 

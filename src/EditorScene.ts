@@ -6,6 +6,7 @@ import { SnappingEngine } from './core/SnappingEngine';
 import { GizmoManager } from './gizmos/GizmoManager';
 import { EditorUI } from './ui/EditorUI';
 import { EditorFrame } from './ui/EditorFrame';
+import { captureViewport, type ViewportState } from './core/ViewportState';
 
 const EDITOR_DEPTH = 100000;
 
@@ -128,9 +129,13 @@ export class EditorScene extends Phaser.Scene {
             this.editorState.selected = hit;
 
             if (hit) {
-                const name = SelectionManager.getObjectName(hit);
-                const design = this.coordSystem.getDesignPosition(hit, this.getHostScene()!);
-                console.log(`[Editor] Selected: ${name} at design(${Math.round(design.x)}, ${Math.round(design.y)})`);
+                const hostScene = this.getHostScene();
+                if (hostScene) {
+                    const vp = captureViewport(this.designWidth, this.designHeight, hostScene, this);
+                    const name = SelectionManager.getObjectName(hit);
+                    const design = this.coordSystem.getDesignPosition(hit, vp);
+                    console.log(`[Editor] Selected: ${name} at design(${Math.round(design.x)}, ${Math.round(design.y)})`);
+                }
             }
         });
 
@@ -152,11 +157,20 @@ export class EditorScene extends Phaser.Scene {
     }
 
     /**
-     * Called every frame. Redraws gizmos and updates coordinate display.
+     * Called every frame. Captures a ViewportState snapshot once and distributes
+     * it to all subsystems that need coordinate math.
      */
     update(): void {
         this.gfx.clear();
         this.drawDesignBounds();
+
+        const hostScene = this.getHostScene();
+
+        // Capture one stable ViewportState for the whole frame
+        const vp: ViewportState | null = hostScene
+            ? captureViewport(this.designWidth, this.designHeight, hostScene, this)
+            : null;
+
         this.selectionMgr.drawSelection(this.gfx);
 
         // Draw hit area overlay on selected object (not in hit area edit mode,
@@ -166,35 +180,34 @@ export class EditorScene extends Phaser.Scene {
             this.drawHitArea(this.gfx, sel);
         }
 
-        this.gizmoMgr.draw(this.gfx);
+        this.gizmoMgr.draw(this.gfx, vp);
 
         // Render snap guides during drag
-        const hostScene = this.getHostScene();
-        if (hostScene) {
-            this.snappingEngine.drawGuides(this.gfx, this.gizmoMgr.snapGuides, this.coordSystem, hostScene);
+        if (hostScene && vp) {
+            this.snappingEngine.drawGuides(this.gfx, this.gizmoMgr.snapGuides, this.coordSystem, vp);
         }
 
-        this.editorUI.refresh();
-        this.updateCoordBar();
+        this.editorUI.refresh(vp ?? undefined);
+        if (vp) {
+            this.updateCoordBar(vp);
+        }
     }
 
     /**
      * Update the coordinate bar with current mouse + selection info.
      */
-    private updateCoordBar(): void {
+    private updateCoordBar(vp: ViewportState): void {
         const pointer = this.input.activePointer;
-        const hostScene = this.getHostScene();
-        if (!hostScene) return;
 
-        const mouseDesign = this.coordSystem.screenToDesign(pointer.x, pointer.y, hostScene);
+        const mouseDesign = this.coordSystem.screenToDesign(pointer.x, pointer.y, vp);
         let text = `Mouse: design(${Math.round(mouseDesign.x)}, ${Math.round(mouseDesign.y)})  screen(${Math.round(pointer.x)}, ${Math.round(pointer.y)})`;
 
         const sel = this.editorState.selected;
         if (sel) {
-            const design = this.coordSystem.getDesignPosition(sel, hostScene);
-            const world = this.coordSystem.getWorldPosition(sel);
+            const design = this.coordSystem.getDesignPosition(sel, vp);
+            const screen = this.coordSystem.getScreenPosition(sel, vp);
             const name = SelectionManager.getObjectName(sel);
-            text += `    |    ${name}: design(${Math.round(design.x)}, ${Math.round(design.y)})  screen(${Math.round(world.x)}, ${Math.round(world.y)})`;
+            text += `    |    ${name}: design(${Math.round(design.x)}, ${Math.round(design.y)})  screen(${Math.round(screen.x)}, ${Math.round(screen.y)})`;
         }
 
         this.editorFrame.setStatusText(text);
@@ -248,46 +261,26 @@ export class EditorScene extends Phaser.Scene {
     /**
      * Draw the hit area shape for the given object as a yellow overlay.
      *
-     * Hit area coordinates are in frame-space (0,0 = top-left of texture bounds).
-     * The world transform matrix origin is at the object's displayOrigin, so we
-     * subtract displayOriginX/Y to convert frame-space → local-space before
-     * applying the matrix.
+     * Uses CoordinateSystem.getHitAreaToScreen() which handles displayOrigin
+     * offset and world transform matrix correctly for all object types.
      *
      * Exception: Containers define hit area vertices in local/origin-relative
      * space (0,0 = container position), and their displayOriginX is hardcoded
      * to width*0.5 regardless of actual hit area layout. So for Containers we
-     * skip the displayOrigin subtraction.
+     * skip the displayOrigin subtraction — handled automatically by getHitAreaToScreen().
      */
     private drawHitArea(gfx: Phaser.GameObjects.Graphics, obj: Phaser.GameObjects.GameObject): void {
         const input = (obj as any).input;
         if (!input?.hitArea) return;
 
         const hitArea = input.hitArea;
-        const matrix: Phaser.GameObjects.Components.TransformMatrix =
-            (obj as any).getWorldTransformMatrix();
+        const toScreen = this.coordSystem.getHitAreaToScreen(obj);
 
         const HIT_FILL_COLOR = 0xffff00;
         const HIT_FILL_ALPHA = 0.15;
         const HIT_STROKE_COLOR = 0xffff00;
         const HIT_STROKE_ALPHA = 0.8;
         const HIT_LINE_WIDTH = 2;
-
-        // Containers have hardcoded displayOriginX = width*0.5 (read-only),
-        // and their hit area vertices are in local space (0,0 = container origin).
-        // All other objects use frame-space hit areas that need displayOrigin subtraction.
-        const isContainer = obj instanceof Phaser.GameObjects.Container;
-        const dx = isContainer ? 0 : ('displayOriginX' in obj ? (obj as any).displayOriginX : 0);
-        const dy = isContainer ? 0 : ('displayOriginY' in obj ? (obj as any).displayOriginY : 0);
-
-        /** Transform a hit area point to screen space, applying displayOrigin offset. */
-        const toScreen = (lx: number, ly: number) => {
-            const adjX = lx - dx;
-            const adjY = ly - dy;
-            return {
-                x: matrix.a * adjX + matrix.c * adjY + matrix.tx,
-                y: matrix.b * adjX + matrix.d * adjY + matrix.ty,
-            };
-        };
 
         if (hitArea instanceof Phaser.Geom.Rectangle) {
             const r = hitArea as Phaser.Geom.Rectangle;
@@ -306,6 +299,8 @@ export class EditorScene extends Phaser.Scene {
         } else if (hitArea instanceof Phaser.Geom.Circle) {
             const c = hitArea as Phaser.Geom.Circle;
             const center = toScreen(c.x, c.y);
+            const matrix: Phaser.GameObjects.Components.TransformMatrix =
+                (obj as any).getWorldTransformMatrix();
             const scaleX = Math.sqrt(matrix.a * matrix.a + matrix.b * matrix.b);
             const scaleY = Math.sqrt(matrix.c * matrix.c + matrix.d * matrix.d);
             const screenRadius = c.radius * (scaleX + scaleY) / 2;

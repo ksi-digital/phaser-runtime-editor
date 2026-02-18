@@ -4,6 +4,7 @@ import { CoordinateSystem } from '../core/CoordinateSystem';
 import { InspectorPanel } from './InspectorPanel';
 import { HierarchyPanel } from './HierarchyPanel';
 import { ToolbarPanel } from './ToolbarPanel';
+import type { ViewportState } from '../core/ViewportState';
 
 export interface EditorUISlots {
     toolbar: HTMLElement;
@@ -19,7 +20,9 @@ export interface EditorUISlots {
 export class EditorUI {
     private state: EditorState;
     private coords: CoordinateSystem;
-    private hostScene: Phaser.Scene;
+
+    /** Latest ViewportState passed from EditorScene.update(). */
+    private currentVp: ViewportState | null = null;
 
     private inspector: InspectorPanel;
     private hierarchy: HierarchyPanel;
@@ -36,7 +39,6 @@ export class EditorUI {
     ) {
         this.state = state;
         this.coords = coords;
-        this.hostScene = hostScene;
 
         this.inspector = new InspectorPanel(slots.inspector, coords);
         this.hierarchy = new HierarchyPanel(state, game, pausedSceneKeys, slots.hierarchy);
@@ -44,24 +46,23 @@ export class EditorUI {
 
         // Wire up selection changes
         this.state.on(EditorState.EVENT_SELECTION_CHANGED, this.onSelectionChanged, this);
-
-        // If something is already selected, bind immediately
-        if (this.state.selected) {
-            this.inspector.bind(this.state.selected, this.hostScene);
-        }
     }
 
     /**
      * Called each frame. Syncs panel values from game objects (for gizmo-driven changes).
+     * Pass the current ViewportState so the inspector can refresh coordinate math.
      */
-    refresh(): void {
-        this.inspector.refresh();
+    refresh(vp?: ViewportState): void {
+        if (vp) {
+            this.currentVp = vp;
+        }
+        this.inspector.refresh(this.currentVp ?? undefined);
         this.hierarchy.refresh();
     }
 
     private onSelectionChanged(obj: Phaser.GameObjects.GameObject | null): void {
-        if (obj) {
-            this.inspector.bind(obj, this.hostScene);
+        if (obj && this.currentVp) {
+            this.inspector.bind(obj, this.currentVp);
         } else {
             this.inspector.dispose();
         }

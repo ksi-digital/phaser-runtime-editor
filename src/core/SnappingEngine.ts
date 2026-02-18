@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { CoordinateSystem } from './CoordinateSystem';
 import type { SnappingConfig } from './EditorState';
+import type { ViewportState } from './ViewportState';
 
 export interface SnapGuide {
     type: 'vertical' | 'horizontal';
@@ -42,7 +43,7 @@ export class SnappingEngine {
         allObjects: Phaser.GameObjects.GameObject[],
         threshold: number,
         coords: CoordinateSystem,
-        hostScene: Phaser.Scene,
+        vp: ViewportState,
         excludeObj?: Phaser.GameObjects.GameObject | null,
     ): SnapResult {
         const guides: SnapGuide[] = [];
@@ -55,7 +56,7 @@ export class SnappingEngine {
             if (obj === excludeObj) continue;
             if ('visible' in obj && !(obj as any).visible) continue;
 
-            const objDesign = coords.getDesignPosition(obj, hostScene);
+            const objDesign = coords.getDesignPosition(obj, vp);
 
             // Center X alignment
             const dx = Math.abs(point.x - objDesign.x);
@@ -101,7 +102,7 @@ export class SnappingEngine {
         config: SnappingConfig,
         allObjects: Phaser.GameObjects.GameObject[],
         coords: CoordinateSystem,
-        hostScene: Phaser.Scene,
+        vp: ViewportState,
         excludeObj?: Phaser.GameObjects.GameObject | null,
     ): SnapResult {
         let result: SnapResult = { point: { ...point }, guides: [] };
@@ -116,7 +117,7 @@ export class SnappingEngine {
                 allObjects,
                 config.objectSnapThreshold,
                 coords,
-                hostScene,
+                vp,
                 excludeObj,
             );
             result = objResult;
@@ -133,7 +134,7 @@ export class SnappingEngine {
         gfx: Phaser.GameObjects.Graphics,
         guides: SnapGuide[],
         coords: CoordinateSystem,
-        hostScene: Phaser.Scene,
+        vp: ViewportState,
     ): void {
         if (guides.length === 0) return;
 
@@ -141,12 +142,12 @@ export class SnappingEngine {
 
         for (const guide of guides) {
             if (guide.type === 'vertical') {
-                const start = coords.designToScreen(guide.designPos, guide.designStart, hostScene);
-                const end = coords.designToScreen(guide.designPos, guide.designEnd, hostScene);
+                const start = coords.designToScreen(guide.designPos, guide.designStart, vp);
+                const end = coords.designToScreen(guide.designPos, guide.designEnd, vp);
                 this.drawDashedLine(gfx, start.x, start.y, end.x, end.y);
             } else {
-                const start = coords.designToScreen(guide.designStart, guide.designPos, hostScene);
-                const end = coords.designToScreen(guide.designEnd, guide.designPos, hostScene);
+                const start = coords.designToScreen(guide.designStart, guide.designPos, vp);
+                const end = coords.designToScreen(guide.designEnd, guide.designPos, vp);
                 this.drawDashedLine(gfx, start.x, start.y, end.x, end.y);
             }
         }
