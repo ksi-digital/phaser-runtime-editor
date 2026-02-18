@@ -6,14 +6,14 @@
 
 ## Current Phase
 
-**Phase 2: Coordinate Refactor** — Not started
+**Phase 2: Coordinate Refactor** — In Progress (Plan 1/2 complete)
 
 ## Phase Status
 
 | Phase | Status | Started | Completed |
 |-------|--------|---------|-----------|
 | 1. Viewport Stability | Complete | 2026-02-18 | 2026-02-18 |
-| 2. Coordinate Refactor | Pending | — | — |
+| 2. Coordinate Refactor | In Progress | 2026-02-18 | — |
 | 3. Object Identification | Pending | — | — |
 | 4. Debugging & UX | Pending | — | — |
 | 5. Robustness | Pending | — | — |
@@ -37,10 +37,13 @@
 | No document.contains() checks in destroy() | 2026-02-18 | Assume DOM container always exists when deactivate is called (user decision) |
 | scrollIntoView separated from highlight | 2026-02-18 | Update highlight every frame is fine; scroll only on selection change event |
 | Single DOM scroll container via wrapper height: 100% | 2026-02-18 | Wrapper fills slot exactly so slot's overflow never triggers; prevents nested scroll conflict |
+| cameraCenterX/Y included in ViewportState | 2026-02-18 | Full Phaser camera projection formula requires screen-space center point |
+| editorScene for canvas dims in captureViewport() | 2026-02-18 | Host scene camera may be scrolled/zoomed; editor overlay always has canvas pixel dims |
+| Hit-area helpers use world matrix only (no ViewportState) | 2026-02-18 | Phaser shared GL context makes matrix.tx/ty screen-correct for rendering |
 
 ## Blockers
 
 None.
 
 ---
-*Last updated: 2026-02-18 after completing Quick Task 1 (fix hierarchy panel scrollbar bounce-back)*
+*Last updated: 2026-02-18 after completing Phase 2 Plan 01 (ViewportState interface + CoordinateSystem refactor)*

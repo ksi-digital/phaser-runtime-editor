@@ -16,10 +16,10 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Coordinate System
 
-- [ ] **COORD-01**: Coordinate transforms must use a per-frame snapshot (ViewportState), not live camera reads
-- [ ] **COORD-02**: All CoordinateSystem methods must accept ViewportState instead of Phaser.Scene
+- [x] **COORD-01**: Coordinate transforms must use a per-frame snapshot (ViewportState), not live camera reads
+- [x] **COORD-02**: All CoordinateSystem methods must accept ViewportState instead of Phaser.Scene
 - [ ] **COORD-03**: Gizmo drags must use a viewport snapshot captured at drag start (no mid-drag jitter)
-- [ ] **COORD-04**: Hit area transform logic must be centralized in CoordinateSystem (remove 3-file duplication)
+- [x] **COORD-04**: Hit area transform logic must be centralized in CoordinateSystem (remove 3-file duplication)
 - [ ] **COORD-05**: Matrix inversion for Container children must be cached at drag start, not per-frame
 
 ### Object Identification
@@ -75,10 +75,10 @@ Deferred to future milestones. Tracked but not in current roadmap.
 | VIEW-02 | Phase 1 | Complete |
 | VIEW-03 | Phase 1 | Complete |
 | VIEW-04 | Phase 1 | Complete |
-| COORD-01 | Phase 2 | Pending |
-| COORD-02 | Phase 2 | Pending |
+| COORD-01 | Phase 2 | Complete |
+| COORD-02 | Phase 2 | Complete |
 | COORD-03 | Phase 2 | Pending |
-| COORD-04 | Phase 2 | Pending |
+| COORD-04 | Phase 2 | Complete |
 | COORD-05 | Phase 2 | Pending |
 | OBJ-01 | Phase 3 | Pending |
 | OBJ-02 | Phase 3 | Pending |

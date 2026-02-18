@@ -54,10 +54,10 @@ Plans:
 
 **Depends on:** Phase 1 (stable viewport eliminates confounding resize events)
 
-**Plans:** 2 plans
+**Plans:** 1/2 plans complete
 
 Plans:
-- [ ] 02-01-PLAN.md — Create ViewportState interface + refactor CoordinateSystem to accept ViewportState + extract hit-area transform helpers
+- [x] 02-01-PLAN.md — Create ViewportState interface + refactor CoordinateSystem to accept ViewportState + extract hit-area transform helpers
 - [ ] 02-02-PLAN.md — Thread ViewportState through all consumers (EditorScene, gizmos, SelectionManager, SnappingEngine, InspectorPanel) + cache MoveGizmo inverse matrix
 
 ---
