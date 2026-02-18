@@ -27,7 +27,7 @@
 **Plans:** 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md — Fix CSS grid columns, add ResizeObserver change guard, harden destroy ordering
+- [x] 01-01-PLAN.md — Fix CSS grid columns, add ResizeObserver change guard, harden destroy ordering
 
 ---
 

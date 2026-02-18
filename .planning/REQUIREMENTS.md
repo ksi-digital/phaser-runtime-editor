@@ -9,10 +9,10 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Viewport Stability
 
-- [ ] **VIEW-01**: Selecting an object must not cause any visual shift of game objects or editor overlays
-- [ ] **VIEW-02**: ResizeObserver must not trigger feedback loops (guard against sub-pixel oscillation)
-- [ ] **VIEW-03**: CSS grid columns must use fixed pixel widths for hierarchy and inspector panels
-- [ ] **VIEW-04**: Canvas cell must maintain stable dimensions regardless of panel content changes
+- [x] **VIEW-01**: Selecting an object must not cause any visual shift of game objects or editor overlays
+- [x] **VIEW-02**: ResizeObserver must not trigger feedback loops (guard against sub-pixel oscillation)
+- [x] **VIEW-03**: CSS grid columns must use fixed pixel widths for hierarchy and inspector panels
+- [x] **VIEW-04**: Canvas cell must maintain stable dimensions regardless of panel content changes
 
 ### Coordinate System
 
@@ -71,10 +71,10 @@ Deferred to future milestones. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VIEW-01 | Phase 1 | Pending |
-| VIEW-02 | Phase 1 | Pending |
-| VIEW-03 | Phase 1 | Pending |
-| VIEW-04 | Phase 1 | Pending |
+| VIEW-01 | Phase 1 | Complete |
+| VIEW-02 | Phase 1 | Complete |
+| VIEW-03 | Phase 1 | Complete |
+| VIEW-04 | Phase 1 | Complete |
 | COORD-01 | Phase 2 | Pending |
 | COORD-02 | Phase 2 | Pending |
 | COORD-03 | Phase 2 | Pending |
