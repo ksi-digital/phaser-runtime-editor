@@ -1,6 +1,6 @@
 {
     "name": "@gamotions/phaser-runtime-editor",
-    "version": "0.1.0",
+    "version": "0.1.2",
     "description": "A Phaser 3/4 scene plugin that injects a runtime visual editor — drag objects, inspect properties, snap to grid, and export layout coordinates as JSON.",
     "type": "module",
     "license": "MIT",
@@ -49,7 +49,7 @@
         "prepublishOnly": "npm run build"
     },
     "peerDependencies": {
-        "phaser": "^4.0.0"
+        "phaser": "^4.0.0-rc.1"
     },
     "devDependencies": {
         "phaser": "^4.0.0-rc.6",
