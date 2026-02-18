@@ -24,7 +24,7 @@
 
 **Risk:** LOW — CSS-only change + observer guard. No coordinate math changes.
 
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [x] 01-01-PLAN.md — Fix CSS grid columns, add ResizeObserver change guard, harden destroy ordering
@@ -125,7 +125,7 @@ Plans:
 
 | Phase | Goal | Requirements | Risk | Depends On |
 |-------|------|-------------|------|------------|
-| 1 | Viewport stability | VIEW-01–04 | LOW | — |
+| 1 | Viewport stability | Complete    | 2026-02-18 | — |
 | 2 | Coordinate refactor | COORD-01–05 | MEDIUM | Phase 1 |
 | 3 | Object identification | OBJ-01–04, DEBUG-03 | LOW | — |
 | 4 | Debugging & UX | DEBUG-01–02, DEBUG-04 | LOW | Phase 2, 3 |
